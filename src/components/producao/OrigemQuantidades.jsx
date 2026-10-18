@@ -5,7 +5,7 @@ import { addDays, format } from 'date-fns';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Segmentado from '@/components/comum/Segmentado';
 import { producaoServico } from '@/servicos/producaoServico';
 
 const iso = (d) => format(d, 'yyyy-MM-dd');
@@ -38,13 +38,9 @@ export default function OrigemQuantidades({ produtos, modosExtras = [], aoMudar,
 
   return (
     <Card className="p-4 space-y-4">
-      <Tabs value={modo} onValueChange={setModo}>
-        <TabsList className="w-full grid h-auto" style={{ gridTemplateColumns: `repeat(${2 + modosExtras.length}, 1fr)` }}>
-          <TabsTrigger value="pedidos" className="py-2">Pelos pedidos</TabsTrigger>
-          <TabsTrigger value="manual" className="py-2">Manual</TabsTrigger>
-          {modosExtras.map((m) => <TabsTrigger key={m.valor} value={m.valor} className="py-2">{m.rotulo}</TabsTrigger>)}
-        </TabsList>
-      </Tabs>
+      <Segmentado rotulo="Origem das quantidades" valor={modo} aoMudar={setModo}
+        colunas={`w-full grid ${modosExtras.length ? 'grid-cols-3' : 'grid-cols-2'}`}
+        opcoes={[{ valor: 'pedidos', rotulo: 'Pelos pedidos' }, { valor: 'manual', rotulo: 'Manual' }, ...modosExtras]} />
 
       {modo === 'pedidos' && (
         <div className="space-y-2">

@@ -214,6 +214,24 @@ const MIGRACOES = [
     `,
     executar: migrarPedidosDoPrototipo,
   },
+  {
+    versao: 5,
+    descricao: 'Sprint 4: despesas relacionais (fluxo de caixa); fim das tabelas do protótipo',
+    sql: `
+      CREATE TABLE IF NOT EXISTS despesa (
+        id TEXT PRIMARY KEY NOT NULL,
+        descricao TEXT NOT NULL,
+        categoria TEXT NOT NULL CHECK (categoria IN ('insumos', 'embalagens', 'equipamentos', 'aluguel', 'energia', 'agua',
+          'gas', 'transporte', 'marketing', 'impostos', 'salarios', 'outros')),
+        valor REAL NOT NULL CHECK (valor > 0),
+        data TEXT NOT NULL,
+        forma_pagamento TEXT CHECK (forma_pagamento IN ('pix', 'dinheiro', 'cartao', 'transferencia', 'boleto', 'outro')),
+        observacoes TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_despesa_data ON despesa(data);
+    `,
+    executar: migrarDespesasDoPrototipo,
+  },
 ];
 
 async function tabelaExiste(db, nome) {
@@ -407,6 +425,21 @@ async function migrarPedidosDoPrototipo(db) {
     }
   }
   await db.executar('DROP TABLE IF EXISTS orders');
+}
+
+async function migrarDespesasDoPrototipo(db) {
+  const CATEGORIAS = ['insumos', 'embalagens', 'equipamentos', 'aluguel', 'energia', 'agua', 'gas', 'transporte', 'marketing',
+    'impostos', 'salarios', 'outros'];
+  const FORMAS = ['pix', 'dinheiro', 'cartao', 'transferencia', 'boleto', 'outro'];
+  for (const d of await lerTabelaAntiga(db, 'expenses')) {
+    if (!d.date || !(numero(d.amount) > 0)) continue;
+    await db.executar(
+      'INSERT OR IGNORE INTO despesa (id, descricao, categoria, valor, data, forma_pagamento, observacoes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [d.id, d.description || 'Despesa', CATEGORIAS.includes(d.category) ? d.category : 'outros', numero(d.amount), d.date,
+        FORMAS.includes(d.payment_method) ? d.payment_method : null, texto(d.notes)]
+    );
+  }
+  await db.executar('DROP TABLE IF EXISTS expenses');
 }
 
 /** Aplica as migrações pendentes e devolve as tarefas a executar depois (ex.: recalcular custos). */

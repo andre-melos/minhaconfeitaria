@@ -117,3 +117,35 @@ export const pedidoRepositorio = {
     return consultar('SELECT id, pedido_id, data, valor, forma FROM pagamento ORDER BY data');
   },
 };
+
+/** Consultas usadas pelos relatórios e pelo fluxo de caixa. */
+export const relatorioRepositorio = {
+  /** Itens vendidos (pedidos Pronto, Entregue e Entregue não pago) com entrega no período (RN15). */
+  itensVendidos(inicio, fim) {
+    return consultar(`
+      SELECT i.pedido_id, i.produto_id, i.quantidade, i.preco_unitario, i.custo_unitario, i.subtotal,
+        pr.nome AS produto_nome, pr.categoria_id, c.nome AS categoria_nome, c.emoji AS categoria_emoji
+      FROM item_pedido i
+      JOIN pedido p ON p.id = i.pedido_id
+      JOIN produto pr ON pr.id = i.produto_id
+      LEFT JOIN categoria c ON c.id = pr.categoria_id
+      WHERE p.status IN ('pronto', 'entregue', 'entregue_nao_pago') AND p.data_entrega BETWEEN ? AND ?`, [inicio, fim]);
+  },
+  pedidosVendidos(inicio, fim) {
+    return consultar(`
+      SELECT id, valor_itens, valor_frete, valor_total FROM pedido
+      WHERE status IN ('pronto', 'entregue', 'entregue_nao_pago') AND data_entrega BETWEEN ? AND ?`, [inicio, fim]);
+  },
+  /** Pagamentos recebidos no período (entradas do fluxo de caixa, RN16). */
+  pagamentosRecebidos(inicio, fim) {
+    return consultar(`
+      SELECT pg.id, pg.pedido_id, pg.data, pg.valor, pg.forma, c.nome AS cliente_nome
+      FROM pagamento pg JOIN pedido p ON p.id = pg.pedido_id JOIN cliente c ON c.id = p.cliente_id
+      WHERE pg.data BETWEEN ? AND ? ORDER BY pg.data DESC`, [inicio, fim]);
+  },
+  /** Saldo a receber de pedidos não cancelados. */
+  async aReceber() {
+    const linhas = await consultar("SELECT COALESCE(SUM(saldo), 0) AS total, COUNT(*) AS pedidos FROM pedido WHERE status <> 'cancelado' AND saldo > 0");
+    return linhas[0];
+  },
+};

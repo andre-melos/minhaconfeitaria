@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // As regras são testadas sem banco: a conexão é substituída por um módulo vazio.
 vi.mock('@/dados/conexao', () => ({ gerarId: () => 'id', agoraIso: () => '2026-01-01T00:00:00Z' }));
-vi.mock('@/dados/legado', () => ({ lerLegado: async () => [] }));
 
 const { calcularCustoPorUnidade } = await import('../insumoServico');
 const { encontrarDataFestiva, domingoDePascoa, datasPadrao } = await import('../dataFestivaServico');
@@ -194,5 +193,50 @@ describe('RN09 a RN11 – calculadoras', () => {
       [{ produto_id: 'brig', embalagem_id: 'cx', embalagem_nome: 'Caixa 4', quantidade: 0.25 }]);
     expect(embalagens[0]).toMatchObject({ quantidade: 2.5, quantidade_compra: 3 });
     expect(semEmbalagem).toEqual(['casad']);
+  });
+});
+
+const { montarRelatorioVendas, montarFluxoCaixa } = await import('../financeiroServico');
+const { validarConteudo } = await import('../backupServico');
+
+describe('RN15 e RN16 – relatório de vendas e fluxo de caixa', () => {
+  const itens = [
+    { pedido_id: 'p1', produto_id: 'brig', produto_nome: 'Brigadeiro', categoria_id: 'doces', categoria_nome: 'Doces', quantidade: 100, preco_unitario: 2.5, custo_unitario: 1.22, subtotal: 250 },
+    { pedido_id: 'p2', produto_id: 'bolo', produto_nome: 'Bolo', categoria_id: 'bolos', categoria_nome: 'Bolos', quantidade: 1, preco_unitario: 120, custo_unitario: 60, subtotal: 120 },
+    { pedido_id: 'p2', produto_id: 'brig', produto_nome: 'Brigadeiro', categoria_id: 'doces', categoria_nome: 'Doces', quantidade: 20, preco_unitario: 2.5, custo_unitario: 1.3, subtotal: 50 },
+  ];
+  const pedidos = [{ id: 'p1', valor_total: 260 }, { id: 'p2', valor_total: 170 }];
+
+  it('usa o custo gravado no item e o total dos pedidos', () => {
+    const r = montarRelatorioVendas(itens, pedidos);
+    expect(r.faturamento).toBe(430);
+    expect(r.custo).toBe(208);
+    expect(r.lucro).toBe(222);
+    expect(r.margem).toBeCloseTo(51.63, 2);
+    expect(r.ticketMedio).toBe(215);
+    expect(r.produtos.find((p) => p.id === 'brig')).toMatchObject({ quantidade: 120, valor: 300 });
+  });
+  it('com filtro de categoria, considera só os itens da categoria', () => {
+    const r = montarRelatorioVendas(itens, pedidos, 'doces');
+    expect(r.faturamento).toBe(300);
+    expect(r.pedidos).toBe(2);
+  });
+  it('fluxo de caixa: entradas menos saídas, agrupando despesas', () => {
+    const f = montarFluxoCaixa([{ valor: 100 }, { valor: 135 }], [{ categoria: 'gas', valor: 120 }, { categoria: 'insumos', valor: 80.5 }, { categoria: 'gas', valor: 10 }]);
+    expect(f).toMatchObject({ entradas: 235, saidas: 210.5, saldo: 24.5 });
+    expect(f.porCategoria[0]).toMatchObject({ categoria: 'gas', valor: 130 });
+  });
+});
+
+describe('RF21 e RF22 – validação do arquivo de backup', () => {
+  const valido = { app: 'MinhaConfeitaria', formato: 1, versao_banco: 5, gerado_em: '2026-11-01T10:00:00Z', tabelas: { cliente: [{ id: 'c1' }], pedido: [] } };
+  it('aceita um backup válido e resume o conteúdo', () => {
+    expect(validarConteudo(JSON.stringify(valido), 5).resumo).toMatchObject({ clientes: 1, pedidos: 0 });
+  });
+  it('recusa arquivo de outro aplicativo, corrompido ou de versão mais nova', () => {
+    expect(() => validarConteudo('{"a":1}', 5)).toThrow('não é um backup do MinhaConfeitaria');
+    expect(() => validarConteudo('não é json', 5)).toThrow('formato inválido');
+    expect(() => validarConteudo(JSON.stringify({ ...valido, versao_banco: 9 }), 5)).toThrow('versão mais nova');
+    expect(() => validarConteudo(JSON.stringify({ ...valido, tabelas: { cliente: 'x' } }), 5)).toThrow('corrompido');
   });
 });

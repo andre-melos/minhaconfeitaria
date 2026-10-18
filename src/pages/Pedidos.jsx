@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, ShoppingBag, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Segmentado from '@/components/comum/Segmentado';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CabecalhoPagina from '@/components/comum/CabecalhoPagina';
 import Carregando from '@/components/comum/Carregando';
@@ -68,15 +68,8 @@ export default function Pedidos() {
       )}
 
       <div className="space-y-3">
-        <Tabs value={filtro} onValueChange={setFiltro}>
-          <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 h-auto">
-            {Object.entries(FILTROS).map(([chave, f]) => (
-              <TabsTrigger key={chave} value={chave} className="py-2">
-                {f.rotulo} ({pedidos.filter(f.teste).length})
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <Segmentado rotulo="Filtrar pedidos" valor={filtro} aoMudar={setFiltro} colunas="w-full grid grid-cols-2 sm:grid-cols-5"
+          opcoes={Object.entries(FILTROS).map(([chave, f]) => ({ valor: chave, rotulo: `${f.rotulo} (${pedidos.filter(f.teste).length})` }))} />
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" aria-hidden="true" />

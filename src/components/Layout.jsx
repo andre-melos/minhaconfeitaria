@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { backupServico } from '@/servicos/backupServico';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import {
   Calendar, Package, Users, ShoppingBag, Plus, Menu, Cake, ShoppingCart, Tag, BarChart3, Wallet,
@@ -86,6 +88,17 @@ function Navegacao({ aoNavegar }) {
   );
 }
 
+function LembreteBackup() {
+  const { data: lembrete } = useQuery({ queryKey: ['lembrete-backup'], queryFn: () => backupServico.precisaLembrar(), staleTime: 60000 });
+  if (!lembrete) return null;
+  return (
+    <div role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex flex-wrap items-center gap-2">
+      <span>{lembrete.dias === null ? 'Você ainda não fez nenhum backup dos seus dados.' : `Seu último backup foi há ${lembrete.dias} dias.`}</span>
+      <Link to="/configuracoes#backup" className="font-medium underline">Fazer backup agora</Link>
+    </div>
+  );
+}
+
 export default function Layout() {
   const [menuAberto, setMenuAberto] = useState(false);
 
@@ -118,6 +131,7 @@ export default function Layout() {
 
       <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
         <div className="p-4 lg:p-8 pb-24">
+          <LembreteBackup />
           <Outlet />
         </div>
       </main>

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { configuracaoServico } from '@/servicos/configuracaoServico';
+import ImportarBackup from '@/components/ImportarBackup';
 
 const TEMPO_SEGUNDO_PLANO_MS = 5 * 60 * 1000;
 const MAX_TENTATIVAS = 5;
@@ -71,7 +72,7 @@ function CriarPin({ aoCriar }) {
   );
 }
 
-function Desbloquear({ aoDesbloquear }) {
+function Desbloquear({ aoDesbloquear, aoRedefinir }) {
   const [pin, setPin] = useState('');
   const [erro, setErro] = useState('');
   const [tentativas, setTentativas] = useState(0);
@@ -111,10 +112,14 @@ function Desbloquear({ aoDesbloquear }) {
         <Button type="submit" className="w-full h-12 bg-rose-600 hover:bg-rose-700" disabled={espera > 0 || pin.length < 4}>
           <Lock className="w-4 h-4 mr-2" aria-hidden="true" /> Desbloquear
         </Button>
-        <p className="text-xs text-gray-500 text-center">
-          Esqueceu o PIN? Só é possível redefini-lo importando um backup, o que substitui os dados atuais.
-        </p>
       </form>
+      <details className="text-sm text-gray-700">
+        <summary className="cursor-pointer text-center text-rose-700">Esqueci o PIN</summary>
+        <div className="mt-3 space-y-2">
+          <p>Por segurança, o PIN só pode ser redefinido importando um backup. Os dados atuais serão substituídos pelos do arquivo.</p>
+          <ImportarBackup apagarPin rotulo="Importar backup e criar novo PIN" aoConcluir={aoRedefinir} />
+        </div>
+      </details>
     </Moldura>
   );
 }
@@ -141,6 +146,6 @@ export default function BloqueioPin({ children }) {
 
   if (estado === 'carregando') return null;
   if (estado === 'criar') return <CriarPin aoCriar={() => setEstado('liberado')} />;
-  if (estado === 'bloqueado') return <Desbloquear aoDesbloquear={() => setEstado('liberado')} />;
+  if (estado === 'bloqueado') return <Desbloquear aoDesbloquear={() => setEstado('liberado')} aoRedefinir={() => setEstado('criar')} />;
   return children;
 }

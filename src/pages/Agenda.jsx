@@ -9,7 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, CalendarDays, PartyPopper, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Segmentado from '@/components/comum/Segmentado';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Carregando from '@/components/comum/Carregando';
 import EstadoVazio from '@/components/comum/EstadoVazio';
@@ -67,9 +67,8 @@ export default function Agenda() {
           <p className="text-gray-600">Pedidos por data de entrega</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Tabs value={visao} onValueChange={setVisao}>
-            <TabsList><TabsTrigger value="dia">Dia</TabsTrigger><TabsTrigger value="semana">Semana</TabsTrigger><TabsTrigger value="mes">Mês</TabsTrigger></TabsList>
-          </Tabs>
+          <Segmentado rotulo="Visualização" valor={visao} aoMudar={setVisao}
+            opcoes={[{ valor: 'dia', rotulo: 'Dia' }, { valor: 'semana', rotulo: 'Semana' }, { valor: 'mes', rotulo: 'Mês' }]} />
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger className="w-48 h-10" aria-label="Filtrar por status"><SelectValue /></SelectTrigger>
             <SelectContent>

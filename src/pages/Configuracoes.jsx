@@ -1,7 +1,12 @@
 // UC19 – Configurar Aplicativo (margem padrão e PIN)
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Percent, KeyRound, Loader2, MessageCircle } from 'lucide-react';
+import { Percent, KeyRound, Loader2, MessageCircle, DatabaseBackup, Download } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { format, parseISO } from 'date-fns';
+import ImportarBackup from '@/components/ImportarBackup';
+import { backupServico } from '@/servicos/backupServico';
+import { toast } from '@/components/ui/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -28,6 +33,11 @@ export default function Configuracoes() {
     }
   }, [config]);
 
+  const queryClient = useQueryClient();
+  const exportar = useAcao(() => backupServico.exportar(), {
+    invalidar: ['configuracao', 'lembrete-backup'], mensagemSucesso: 'Backup gerado.',
+  });
+
   const salvarMensagens = useAcao((m) => configuracaoServico.salvarMensagens(m), {
     invalidar: ['configuracao'], mensagemSucesso: 'Mensagens salvas.',
   });
@@ -44,6 +54,25 @@ export default function Configuracoes() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <CabecalhoPagina titulo="Configurações" />
+
+      <Card className="p-5 space-y-4" id="backup">
+        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+          <DatabaseBackup className="w-5 h-5 text-rose-600" aria-hidden="true" /> Backup dos dados
+        </h2>
+        <p className="text-sm text-gray-600">
+          Os dados ficam só neste aparelho. Exporte um backup com frequência e guarde o arquivo fora do celular
+          (Google Drive, e-mail ou WhatsApp). O PIN não vai no arquivo.
+        </p>
+        <p className="text-sm">
+          Último backup: <strong>{config?.ultimo_backup_em ? format(parseISO(config.ultimo_backup_em), "dd/MM/yyyy 'às' HH:mm") : 'nunca'}</strong>
+        </p>
+        <div className="flex flex-wrap gap-3 items-start">
+          <Button className="h-11 bg-rose-600 hover:bg-rose-700" onClick={() => exportar.mutate()} disabled={exportar.isPending}>
+            {exportar.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} Exportar backup
+          </Button>
+          <ImportarBackup aoConcluir={() => { queryClient.invalidateQueries(); toast({ title: 'Backup importado.' }); }} />
+        </div>
+      </Card>
 
       <Card className="p-5 space-y-4">
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
