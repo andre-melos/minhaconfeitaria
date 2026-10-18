@@ -33,3 +33,7 @@ public/assets/sql-wasm.wasm
 
 # Projetos nativos gerados pelo Capacitor: builds locais
 android/app/build
+
+# Chaves de assinatura do Android (nunca versionar)
+*.jks
+*.keystore
