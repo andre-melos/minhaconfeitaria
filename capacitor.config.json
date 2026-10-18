@@ -1,0 +1,15 @@
+{
+  "appId": "com.minhaconfeitaria.app",
+  "appName": "MinhaConfeitaria",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorSQLite": {
+      "iosDatabaseLocation": "Library/CapacitorDatabase",
+      "iosIsEncryption": false,
+      "androidIsEncryption": false
+    }
+  }
+}
