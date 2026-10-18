@@ -11,6 +11,7 @@ const ehWeb = () => Capacitor.getPlatform() === 'web';
 let conexao = null;
 let inicializacao = null;
 let emTransacao = false;
+let tarefasPosMigracao = [];
 
 async function abrirConexao() {
   if (ehWeb()) {
@@ -80,6 +81,11 @@ export function agoraIso() {
   return new Date().toISOString();
 }
 
+/** Tarefas que as migrações pediram para executar depois de abrir o banco (ex.: 'recalcular-custos'). */
+export function obterTarefasPosMigracao() {
+  return tarefasPosMigracao;
+}
+
 /** Abre o banco, liga as chaves estrangeiras e aplica as migrações pendentes. */
 export function iniciarBanco() {
   if (inicializacao) return inicializacao;
@@ -87,14 +93,7 @@ export function iniciarBanco() {
     conexao = await abrirConexao();
     await conexao.open();
     await conexao.execute('PRAGMA foreign_keys = ON;', false);
-    const tarefas = await aplicarMigracoes({ consultar, executar, executarScript, transacao });
-    if (tarefas.includes('recalcular-custos')) {
-      const { produtoServico } = await import('@/servicos/produtoServico');
-      await produtoServico.recalcularTodos();
-      // Itens de pedidos migrados antes do cálculo dos custos recebem o custo atual do produto.
-      await executar(`UPDATE item_pedido SET custo_unitario = (SELECT custo_unitario FROM produto WHERE produto.id = item_pedido.produto_id)
-        WHERE custo_unitario = 0 AND EXISTS (SELECT 1 FROM sqlite_master WHERE name = 'item_pedido')`).catch(() => {});
-    }
+    tarefasPosMigracao = await aplicarMigracoes({ consultar, executar, executarScript, transacao });
     await persistirWeb();
   })();
   return inicializacao;

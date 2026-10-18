@@ -9,6 +9,20 @@ export default defineConfig({
     },
   },
   plugins: [react()],
+  build: {
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        // Separa as bibliotecas em arquivos próprios (melhor cache e arquivos menores).
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
+          graficos: ['recharts'],
+          interface: ['@radix-ui/react-dialog', '@radix-ui/react-alert-dialog', '@radix-ui/react-select',
+            '@radix-ui/react-tabs', '@radix-ui/react-switch', '@radix-ui/react-radio-group', 'lucide-react'],
+        },
+      },
+    },
+  },
   test: {
     environment: 'node',
   },
