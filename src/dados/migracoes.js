@@ -156,6 +156,64 @@ const MIGRACOES = [
     `,
     executar: migrarProdutosDoPrototipo,
   },
+  {
+    versao: 4,
+    descricao: 'Sprint 3: pedidos, itens com custo gravado, pagamentos e textos de mensagem',
+    sql: `
+      CREATE TABLE IF NOT EXISTS pedido (
+        id TEXT PRIMARY KEY NOT NULL,
+        cliente_id TEXT NOT NULL REFERENCES cliente(id) ON DELETE RESTRICT,
+        data_pedido TEXT NOT NULL,
+        data_entrega TEXT NOT NULL,
+        hora_entrega TEXT,
+        tipo_entrega TEXT NOT NULL CHECK (tipo_entrega IN ('retirada', 'entrega')),
+        endereco_entrega TEXT,
+        valor_frete REAL NOT NULL DEFAULT 0 CHECK (valor_frete >= 0),
+        tipo_desconto TEXT NOT NULL DEFAULT 'fixo' CHECK (tipo_desconto IN ('fixo', 'percentual')),
+        valor_desconto REAL NOT NULL DEFAULT 0 CHECK (valor_desconto >= 0),
+        valor_itens REAL NOT NULL DEFAULT 0,
+        valor_total REAL NOT NULL DEFAULT 0,
+        valor_pago REAL NOT NULL DEFAULT 0,
+        saldo REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'orcamento' CHECK (status IN ('orcamento', 'aguardando_sinal', 'confirmado',
+          'em_producao', 'pronto', 'entregue', 'entregue_nao_pago', 'cancelado')),
+        data_festiva INTEGER NOT NULL DEFAULT 0 CHECK (data_festiva IN (0, 1)),
+        observacoes TEXT,
+        atualizado_em TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_pedido_entrega ON pedido(data_entrega);
+      CREATE INDEX IF NOT EXISTS idx_pedido_cliente ON pedido(cliente_id);
+
+      CREATE TABLE IF NOT EXISTS item_pedido (
+        id TEXT PRIMARY KEY NOT NULL,
+        pedido_id TEXT NOT NULL REFERENCES pedido(id) ON DELETE CASCADE,
+        produto_id TEXT NOT NULL REFERENCES produto(id) ON DELETE RESTRICT,
+        quantidade REAL NOT NULL CHECK (quantidade > 0),
+        preco_unitario REAL NOT NULL CHECK (preco_unitario >= 0),
+        custo_unitario REAL NOT NULL DEFAULT 0,
+        subtotal REAL NOT NULL,
+        observacoes TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_item_pedido_pedido ON item_pedido(pedido_id);
+      CREATE INDEX IF NOT EXISTS idx_item_pedido_produto ON item_pedido(produto_id);
+
+      CREATE TABLE IF NOT EXISTS pagamento (
+        id TEXT PRIMARY KEY NOT NULL,
+        pedido_id TEXT NOT NULL REFERENCES pedido(id) ON DELETE CASCADE,
+        data TEXT NOT NULL,
+        valor REAL NOT NULL CHECK (valor > 0),
+        forma TEXT NOT NULL CHECK (forma IN ('pix', 'dinheiro', 'cartao', 'transferencia', 'outro'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_pagamento_data ON pagamento(data);
+
+      ALTER TABLE configuracao ADD COLUMN endereco_retirada TEXT;
+      ALTER TABLE configuracao ADD COLUMN mensagem_pagamento TEXT;
+      UPDATE configuracao SET mensagem_pagamento =
+        'O pagamento deverá ser realizado 50% no momento do pedido e 50% na {tipo}. O pedido somente será confirmado após o pagamento do sinal.'
+      WHERE id = 1;
+    `,
+    executar: migrarPedidosDoPrototipo,
+  },
 ];
 
 async function tabelaExiste(db, nome) {
@@ -303,6 +361,52 @@ async function migrarProdutosDoPrototipo(db) {
   }
   // Os custos dos produtos migrados são calculados pela regra oficial (RN03 a RN06).
   if (db.aposMigrar) db.aposMigrar.push('recalcular-custos');
+}
+
+async function migrarPedidosDoPrototipo(db) {
+  const agora = new Date().toISOString();
+  const clientes = new Set((await db.consultar('SELECT id FROM cliente')).map((c) => c.id));
+  const produtos = new Map((await db.consultar('SELECT id, custo_unitario FROM produto')).map((p) => [p.id, p]));
+  const STATUS = ['orcamento', 'aguardando_sinal', 'confirmado', 'em_producao', 'pronto', 'entregue', 'entregue_nao_pago', 'cancelado'];
+  const FORMAS = ['pix', 'dinheiro', 'cartao', 'transferencia', 'outro'];
+
+  for (const o of await lerTabelaAntiga(db, 'orders')) {
+    if (!o.delivery_date) continue;
+    let clienteId = o.client_id;
+    if (!clientes.has(clienteId)) { // cliente apagado no protótipo: recria a partir dos dados guardados no pedido
+      clienteId = crypto.randomUUID();
+      await db.executar('INSERT INTO cliente (id, nome, telefone, criado_em) VALUES (?, ?, ?, ?)',
+        [clienteId, o.client_name || 'Cliente do protótipo', o.client_phone || '-', agora]);
+      clientes.add(clienteId);
+    }
+    const itens = (o.items || []).filter((i) => produtos.has(i.product_id) && numero(i.quantity) > 0);
+    const valorItens = itens.reduce((s, i) => s + numero(i.quantity) * numero(i.unit_price), 0);
+    const total = numero(o.total_value, valorItens);
+    const pago = Math.max(0, numero(o.paid_value));
+    await db.executar(
+      `INSERT OR IGNORE INTO pedido (id, cliente_id, data_pedido, data_entrega, hora_entrega, tipo_entrega, endereco_entrega,
+        valor_frete, tipo_desconto, valor_desconto, valor_itens, valor_total, valor_pago, saldo, status, data_festiva,
+        observacoes, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [o.id, clienteId, o.order_date || (o.created_date || agora).slice(0, 10), o.delivery_date, texto(o.delivery_time),
+        o.delivery_type === 'entrega' ? 'entrega' : 'retirada', texto(o.delivery_address), Math.max(0, numero(o.freight_value)),
+        o.discount_type === 'percent' ? 'percentual' : 'fixo', Math.max(0, numero(o.discount_value)), valorItens, total, pago,
+        Math.max(0, total - pago), STATUS.includes(o.status) ? o.status : 'orcamento', o.is_holiday_order ? 1 : 0,
+        texto(o.notes), agora]
+    );
+    for (const i of itens) {
+      await db.executar(
+        `INSERT INTO item_pedido (id, pedido_id, produto_id, quantidade, preco_unitario, custo_unitario, subtotal, observacoes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [crypto.randomUUID(), o.id, i.product_id, numero(i.quantity), Math.max(0, numero(i.unit_price)),
+          produtos.get(i.product_id).custo_unitario, numero(i.quantity) * numero(i.unit_price), texto(i.notes)]
+      );
+    }
+    if (pago > 0) { // o protótipo guardava só o total pago: vira um pagamento na data do pedido
+      await db.executar('INSERT INTO pagamento (id, pedido_id, data, valor, forma) VALUES (?, ?, ?, ?, ?)',
+        [crypto.randomUUID(), o.id, o.order_date || o.delivery_date, pago, FORMAS.includes(o.payment_method) ? o.payment_method : 'outro']);
+    }
+  }
+  await db.executar('DROP TABLE IF EXISTS orders');
 }
 
 /** Aplica as migrações pendentes e devolve as tarefas a executar depois (ex.: recalcular custos). */

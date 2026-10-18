@@ -111,3 +111,88 @@ describe('RN07 e RN02 – revisão de preços e componentes', () => {
     expect(criaCiclo('A', 'D', mapa)).toBe(false);
   });
 });
+
+const { calcularTotais, statusPermitidos, statusAposPagamento, statusDeEntrega, mensagemResumoPedido, linkWhatsApp } = await import('../regrasPedido');
+const { calcularMassas, montarCaixaDegustacao, calcularInsumos, calcularEmbalagens, quantidadeLegivel } = await import('../producaoServico');
+
+describe('RN14 – totais do pedido', () => {
+  const itens = [{ quantidade: 50, preco_unitario: 2.5 }, { quantidade: 1, preco_unitario: 80 }];
+  it('soma itens, frete e desconto fixo', () => {
+    const t = calcularTotais({ itens, tipo_entrega: 'entrega', valor_frete: 10, tipo_desconto: 'fixo', valor_desconto: 15 });
+    expect(t).toMatchObject({ valor_itens: 205, valor_frete: 10, desconto_aplicado: 15, valor_total: 200, saldo: 200 });
+  });
+  it('desconto percentual incide sobre os itens', () => {
+    const t = calcularTotais({ itens, tipo_entrega: 'entrega', valor_frete: 10, tipo_desconto: 'percentual', valor_desconto: 10, valor_pago: 50 });
+    expect(t.desconto_aplicado).toBe(20.5);
+    expect(t.valor_total).toBe(194.5);
+    expect(t.saldo).toBe(144.5);
+  });
+  it('retirada não cobra frete', () => {
+    expect(calcularTotais({ itens, tipo_entrega: 'retirada', valor_frete: 10 }).valor_frete).toBe(0);
+  });
+});
+
+describe('RN13 – ciclo do pedido', () => {
+  it('pagamento do sinal confirma o pedido', () => expect(statusAposPagamento('aguardando_sinal', 50)).toBe('confirmado'));
+  it('quitar pedido entregue não pago o torna entregue', () => expect(statusAposPagamento('entregue_nao_pago', 0)).toBe('entregue'));
+  it('entrega com saldo fica como não paga', () => {
+    expect(statusDeEntrega(10)).toBe('entregue_nao_pago');
+    expect(statusDeEntrega(0)).toBe('entregue');
+  });
+  it('pedido entregue não volta para produção nem é cancelado', () => {
+    expect(statusPermitidos('entregue', 0)).toEqual([]);
+    expect(statusPermitidos('pronto', 0)).toContain('cancelado');
+    expect(statusPermitidos('cancelado', 0)).toEqual(['orcamento']);
+  });
+  it('monta a mensagem de resumo e o link do WhatsApp', () => {
+    const texto = mensagemResumoPedido({
+      tipo_entrega: 'retirada', data_entrega: '2026-11-20', hora_entrega: '15:00', valor_frete: 0, valor_total: 125,
+      itens: [{ produto_nome: 'Brigadeiro', quantidade: 50, preco_unitario: 2.5, subtotal: 125 }],
+    }, { endereco_retirada: 'Rua A, 1', mensagem_pagamento: '50% na {tipo}.' });
+    expect(texto).toContain('50% na retirada.');
+    expect(texto).toContain('📍 Endereço: Rua A, 1');
+    expect(linkWhatsApp('(51) 99999-0000')).toBe('https://wa.me/5551999990000');
+  });
+});
+
+describe('RN09 a RN11 – calculadoras', () => {
+  const configs = [
+    { produto_id: 'brig', produto_nome: 'Brigadeiro', peso_unitario_g: 20, massas: [{ massa_id: 'preta', massa_nome: 'Preta', percentual: 100, rendimento_g: 850 }] },
+    { produto_id: 'casad', produto_nome: 'Casadinho', peso_unitario_g: 20, massas: [
+      { massa_id: 'preta', massa_nome: 'Preta', percentual: 50, rendimento_g: 850 },
+      { massa_id: 'branca', massa_nome: 'Branca', percentual: 50, rendimento_g: 800 }] },
+  ];
+  it('calcula gramas e receitas arredondadas em 0,5', () => {
+    const { massas } = calcularMassas({ brig: 100, casad: 40 }, configs);
+    const preta = massas.find((m) => m.massa_id === 'preta');
+    expect(preta.gramas).toBe(2400);
+    expect(preta.receitas_exatas).toBeCloseTo(2.8235, 3);
+    expect(preta.receitas).toBe(3);
+    expect(massas.find((m) => m.massa_id === 'branca').receitas).toBe(0.5);
+  });
+  it('monta a caixa degustação com 1 de cada sabor e completa as vagas', () => {
+    const q = montarCaixaDegustacao(configs, ['brig', 'casad'], 4, 10);
+    expect(q.brig + q.casad).toBe(40);
+    expect(q.brig).toBeGreaterThanOrEqual(10);
+    expect(q.casad).toBeGreaterThanOrEqual(10);
+    expect(() => montarCaixaDegustacao(configs, ['brig', 'casad'], 1, 1)).toThrow('pelo menos 2 lugares');
+  });
+  it('soma os insumos expandindo componentes', () => {
+    const produtos = [{ id: 'massa', rendimento: 1000 }, { id: 'bolo', rendimento: 1 }];
+    const fichas = [
+      { produto_id: 'massa', insumo_id: 'farinha', insumo_nome: 'Farinha', insumo_unidade: 'kg', quantidade: 600 },
+      { produto_id: 'bolo', insumo_id: 'ovo', insumo_nome: 'Ovo', insumo_unidade: 'un', quantidade: 3 },
+    ];
+    const componentes = [{ produto_id: 'bolo', componente_id: 'massa', quantidade: 500 }];
+    const { insumos } = calcularInsumos({ bolo: 2 }, produtos, fichas, componentes);
+    expect(insumos.find((i) => i.insumo_id === 'farinha')).toMatchObject({ quantidade: 600, unidade: 'g' });
+    expect(insumos.find((i) => i.insumo_id === 'ovo').quantidade).toBe(6);
+    expect(quantidadeLegivel(2500, 'g')).toBe('2,5 kg');
+  });
+  it('soma as embalagens e arredonda para compra', () => {
+    const { embalagens, semEmbalagem } = calcularEmbalagens({ brig: 10, casad: 3 },
+      [{ produto_id: 'brig', embalagem_id: 'cx', embalagem_nome: 'Caixa 4', quantidade: 0.25 }]);
+    expect(embalagens[0]).toMatchObject({ quantidade: 2.5, quantidade_compra: 3 });
+    expect(semEmbalagem).toEqual(['casad']);
+  });
+});

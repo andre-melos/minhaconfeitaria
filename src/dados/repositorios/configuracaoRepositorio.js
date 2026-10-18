@@ -2,10 +2,14 @@ import { consultarUm, executar } from '../conexao';
 
 export const configuracaoRepositorio = {
   obter() {
-    return consultarUm('SELECT margem_padrao, pin_hash, pin_salt, ultimo_backup_em FROM configuracao WHERE id = 1');
+    return consultarUm('SELECT margem_padrao, pin_hash, pin_salt, ultimo_backup_em, endereco_retirada, mensagem_pagamento FROM configuracao WHERE id = 1');
   },
   salvarMargemPadrao(margem) {
     return executar('UPDATE configuracao SET margem_padrao = ? WHERE id = 1', [margem]);
+  },
+  salvarMensagens(enderecoRetirada, mensagemPagamento) {
+    return executar('UPDATE configuracao SET endereco_retirada = ?, mensagem_pagamento = ? WHERE id = 1',
+      [enderecoRetirada, mensagemPagamento]);
   },
   salvarPin(hash, salt) {
     return executar('UPDATE configuracao SET pin_hash = ?, pin_salt = ? WHERE id = 1', [hash, salt]);

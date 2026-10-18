@@ -18,13 +18,24 @@ function gerarSalt() {
 export const configuracaoServico = {
   async obter() {
     const c = await configuracaoRepositorio.obter();
-    return { margem_padrao: c.margem_padrao, tem_pin: !!c.pin_hash, ultimo_backup_em: c.ultimo_backup_em };
+    return {
+      margem_padrao: c.margem_padrao,
+      tem_pin: !!c.pin_hash,
+      ultimo_backup_em: c.ultimo_backup_em,
+      endereco_retirada: c.endereco_retirada ?? '',
+      mensagem_pagamento: c.mensagem_pagamento ?? '',
+    };
   },
 
   async salvarMargemPadrao(valor) {
     const margem = exigirNumero(valor, 'A margem padrão', { minimo: 0 });
     if (margem > 95) throw new ErroDeNegocio('A margem padrão deve ser de no máximo 95%.');
     await configuracaoRepositorio.salvarMargemPadrao(margem);
+  },
+
+  async salvarMensagens({ endereco_retirada, mensagem_pagamento }) {
+    const limpar = (t) => ((t ?? '').trim() === '' ? null : t.trim());
+    await configuracaoRepositorio.salvarMensagens(limpar(endereco_retirada), limpar(mensagem_pagamento));
   },
 
   async verificarPin(pin) {

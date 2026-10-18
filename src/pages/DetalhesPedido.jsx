@@ -1,510 +1,251 @@
-import { db } from '@/dados/legado';
-
-import React, { useState } from 'react';
-
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+// UC10 – Gerenciar Pedido: status, pagamentos, edição, cancelamento e mensagens ao cliente
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { ArrowLeft, Pencil, Phone, MessageCircle, Send, Bell, Truck, Store, Wallet, Trash2, PartyPopper } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import Carregando from '@/components/comum/Carregando';
+import BotoesFormulario from '@/components/comum/BotoesFormulario';
+import ConfirmarExclusao from '@/components/comum/ConfirmarExclusao';
+import StatusPedido from '@/components/pedidos/StatusPedido';
+import { pedidoServico } from '@/servicos/pedidoServico';
+import { configuracaoServico } from '@/servicos/configuracaoServico';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { 
-  ArrowLeft, 
-  Package, 
-  Truck, 
-  Phone, 
-  MapPin,
-  Calendar,
-  Clock,
-  DollarSign,
-  Loader2,
-  Trash2,
-  MessageCircle,
-  Edit2
-} from 'lucide-react';
-import { Link } from 'react-router-dom';
-import StatusBadge, { statusConfig } from '../components/orders/StatusBadge';
+  STATUS_PEDIDO, FORMAS_PAGAMENTO, statusPermitidos, podeEditar, mensagemResumoPedido, mensagemPedidoPronto, linkWhatsApp,
+} from '@/servicos/regrasPedido';
+import { useAcao } from '@/hooks/useAcao';
+import { moeda, numero } from '@/lib/formatacao';
 
-export default function OrderDetails() {
-  const { id: orderId } = useParams();
-  
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [paymentData, setPaymentData] = useState({ amount: '', method: 'pix' });
+const dataLonga = (iso) => {
+  const texto = format(parseISO(iso), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+};
 
-  const { data: order, isLoading } = useQuery({
-    queryKey: ['order', orderId],
-    queryFn: async () => {
-      const orders = await db.entities.Order.filter({ id: orderId });
-      return orders[0];
-    },
-    enabled: !!orderId
+function Linha({ rotulo, valor, classe = '' }) {
+  return <div className={`flex justify-between ${classe}`}><span>{rotulo}</span><span>{valor}</span></div>;
+}
+
+export default function DetalhesPedido() {
+  const { id } = useParams();
+  const navegar = useNavigate();
+  const [pagamento, setPagamento] = useState(null);
+  const [confirmar, setConfirmar] = useState(null); // 'excluir' | 'cancelar' | { pagamento }
+
+  const { data: pedido, isLoading } = useQuery({ queryKey: ['pedido', id], queryFn: () => pedidoServico.obter(id) });
+  const { data: config } = useQuery({ queryKey: ['configuracao'], queryFn: configuracaoServico.obter });
+
+  const invalidar = ['pedido', 'pedidos'];
+  const mudarStatus = useAcao((novo) => pedidoServico.alterarStatus(id, novo), {
+    invalidar, aoConcluir: () => setConfirmar(null), mensagemSucesso: 'Status atualizado.',
+  });
+  const pagar = useAcao((dados) => pedidoServico.registrarPagamento(id, dados), {
+    invalidar, mensagemSucesso: 'Pagamento registrado.', aoConcluir: () => setPagamento(null),
+  });
+  const removerPagamento = useAcao((pagId) => pedidoServico.excluirPagamento(id, pagId), {
+    invalidar, mensagemSucesso: 'Pagamento removido.', aoConcluir: () => setConfirmar(null),
+  });
+  const excluir = useAcao(() => pedidoServico.excluir(id), {
+    invalidar: ['pedidos'], mensagemSucesso: 'Pedido excluído.', aoConcluir: () => navegar('/pedidos', { replace: true }),
   });
 
-  const updateOrderMutation = useMutation({
-    mutationFn: ({ id, data }) => db.entities.Order.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['order', orderId]);
-      queryClient.invalidateQueries(['orders']);
-    }
-  });
-
-  const deleteOrderMutation = useMutation({
-    mutationFn: (id) => db.entities.Order.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['orders']);
-      navigate('/pedidos');
-    }
-  });
-
-  const handleStatusChange = (newStatus) => {
-    updateOrderMutation.mutate({
-      id: orderId,
-      data: { status: newStatus }
-    });
-  };
-
-  const handlePayment = () => {
-    const amount = parseFloat(paymentData.amount) || 0;
-    const newPaidValue = (order.paid_value || 0) + amount;
-    const newBalance = (order.total_value || 0) - newPaidValue;
-    
-    let newStatus = order.status;
-    if (order.status === 'aguardando_sinal' && amount > 0) {
-      newStatus = 'confirmado';
-    }
-    if (newBalance <= 0 && order.status !== 'entregue') {
-      // Fully paid
-    }
-
-    updateOrderMutation.mutate({
-      id: orderId,
-      data: {
-        paid_value: newPaidValue,
-        balance: Math.max(0, newBalance),
-        payment_method: paymentData.method,
-        status: newStatus
-      }
-    });
-
-    setShowPaymentDialog(false);
-    setPaymentData({ amount: '', method: 'pix' });
-  };
-
-  if (isLoading) {
+  if (isLoading) return <Carregando />;
+  if (!pedido) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-rose-500" />
+      <div className="text-center py-12 space-y-4">
+        <p className="text-gray-700">Pedido não encontrado.</p>
+        <Button asChild><Link to="/pedidos">Voltar para pedidos</Link></Button>
       </div>
     );
   }
 
-  if (!order) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Pedido não encontrado</p>
-        <Link to={'/pedidos'}>
-          <Button className="mt-4">Voltar para Pedidos</Button>
-        </Link>
-      </div>
-    );
-  }
-
-  // Mensagem de repassar pedido
-  const buildRepassarMessage = () => {
-    const items = (order.items || []).map(item => 
-      `• ${item.product_name} - ${item.quantity}x R$ ${(item.unit_price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = R$ ${(item.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-    ).join('\n');
-    
-    const deliveryType = order.delivery_type === 'retirada' ? 'retirada' : 'entrega';
-    const deliveryTypeText = order.delivery_type === 'retirada' ? 'retirada' : 'entrega';
-    const dateTime = `${order.delivery_date ? format(parseISO(order.delivery_date), "dd/MM/yyyy", { locale: ptBR }) : ''} às ${order.delivery_time || 'horário a combinar'}`;
-    
-    let message = `Repassando seu pedido:\n\n${items}`;
-    
-    if (order.freight_value && order.freight_value > 0) {
-      message += `\n• Entrega - R$ ${order.freight_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-    }
-    
-    message += `\n\nTotal: R$ ${(order.total_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\nO pagamento deverá ser realizado 50% no momento do pedido e 50% na ${deliveryTypeText}. O pedido somente será confirmado após o pagamento do sinal.\n\n📅 Data e horário da ${deliveryType}: ${dateTime}`;
-    
-    if (order.delivery_type === 'retirada') {
-      message += `\n\n📍 Endereço: Rua Inácio Justino, 396, no final da Rua da Escola Mascarenhas, em frente ao Mini Mercado Marques`;
-    }
-    
-    message += `\n\nObrigada pela encomenda! 🤎`;
-    
-    return encodeURIComponent(message);
-  };
-
-  // Mensagem de pedido pronto
-  const buildPedidoProntoMessage = () => {
-    const hour = new Date().getHours();
-    let greeting = 'boa tarde';
-    if (hour >= 0 && hour < 12) {
-      greeting = 'bom dia';
-    } else if (hour >= 18 && hour <= 23) {
-      greeting = 'boa noite';
-    }
-    return encodeURIComponent(`Oii, ${greeting}! Passando para avisar que seu pedido já está disponível para retirada 🥰`);
-  };
+  const permitidos = statusPermitidos(pedido.status, pedido.saldo).filter((s) => s !== 'cancelado');
+  const podeCancelar = statusPermitidos(pedido.status, pedido.saldo).includes('cancelado');
+  const podeExcluir = ['orcamento', 'cancelado'].includes(pedido.status) && pedido.pagamentos.length === 0;
+  const IconeEntrega = pedido.tipo_entrega === 'entrega' ? Truck : Store;
+  const desconto = pedido.valor_itens + pedido.valor_frete - pedido.valor_total;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-8">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Link to={'/pedidos'}>
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-          </Link>
+    <div className="max-w-2xl mx-auto space-y-5 pb-8">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button asChild variant="ghost" size="icon" className="h-11 w-11">
+            <Link to="/pedidos" aria-label="Voltar para pedidos"><ArrowLeft className="w-5 h-5" /></Link>
+          </Button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Pedido</h1>
-            <p className="text-gray-500">#{order.id?.slice(-6)}</p>
+            <p className="text-gray-600 text-sm">Registrado em {format(parseISO(pedido.data_pedido), 'dd/MM/yyyy')}</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-2">
-          <Link to={`/pedidos/${orderId}/editar`}>
-            <Button variant="outline" size="sm">
-              <Edit2 className="w-4 h-4 mr-2" />
-              Editar
-            </Button>
-          </Link>
-          <StatusBadge status={order.status} />
-        </div>
+        {podeEditar(pedido.status) && (
+          <Button asChild variant="outline" className="h-11">
+            <Link to={`/pedidos/${id}/editar`}><Pencil className="w-4 h-4 mr-2" /> Editar</Link>
+          </Button>
+        )}
       </div>
 
-      {/* Holiday Warning */}
-      {order.is_holiday_order && (
-        <Card className="p-4 bg-rose-50 border-rose-200">
-          <div className="flex items-center gap-2 text-rose-700">
-            <span className="text-xl">🎉</span>
-            <span className="font-medium">Pedido para data festiva</span>
-          </div>
-        </Card>
-      )}
-
-      {/* Client Info */}
       <Card className="p-4 space-y-3">
-        <h3 className="font-semibold text-gray-900">Cliente</h3>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="font-medium text-lg">{order.client_name}</div>
-            {order.client_phone && (
-              <div className="flex items-center gap-2 text-gray-500">
-                <Phone className="w-4 h-4" />
-                {order.client_phone}
-              </div>
-            )}
-          </div>
-          
-          {order.client_phone && (
-            <div className="flex flex-wrap gap-2">
-              <a 
-                href={`https://wa.me/55${order.client_phone.replace(/\D/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button variant="outline" size="sm" className="text-green-600 border-green-200 hover:bg-green-50">
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  WhatsApp
-                </Button>
-              </a>
-              <a 
-                href={`https://wa.me/55${order.client_phone.replace(/\D/g, '')}?text=${buildRepassarMessage()}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button variant="outline" size="sm" className="text-rose-600 border-rose-200 hover:bg-rose-50">
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Repassar Pedido
-                </Button>
-              </a>
-              <a 
-                href={`https://wa.me/55${order.client_phone.replace(/\D/g, '')}?text=${buildPedidoProntoMessage()}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button variant="outline" size="sm" className="text-amber-600 border-amber-200 hover:bg-amber-50">
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Avisar Pronto
-                </Button>
-              </a>
-            </div>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <StatusPedido status={pedido.status} />
+          {permitidos.length > 0 && (
+            <Select value="" onValueChange={(s) => mudarStatus.mutate(s)}>
+              <SelectTrigger className="w-56 h-11" aria-label="Alterar status"><SelectValue placeholder="Alterar status para..." /></SelectTrigger>
+              <SelectContent>
+                {permitidos.map((s) => <SelectItem key={s} value={s}>{STATUS_PEDIDO[s]}</SelectItem>)}
+              </SelectContent>
+            </Select>
           )}
         </div>
-      </Card>
-
-      {/* Delivery Info */}
-      <Card className="p-4 space-y-4">
-        <h3 className="font-semibold text-gray-900">Entrega</h3>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-gray-600" />
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Data</div>
-              <div className="font-medium">
-                {order.delivery_date && format(parseISO(order.delivery_date), "dd/MM/yyyy", { locale: ptBR })}
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-              <Clock className="w-5 h-5 text-gray-600" />
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Horário</div>
-              <div className="font-medium">{order.delivery_time || 'A combinar'}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 pt-2">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-            order.delivery_type === 'entrega' ? 'bg-blue-100' : 'bg-emerald-100'
-          }`}>
-            {order.delivery_type === 'entrega' ? (
-              <Truck className="w-5 h-5 text-blue-600" />
-            ) : (
-              <Package className="w-5 h-5 text-emerald-600" />
-            )}
-          </div>
-          <div>
-            <div className="text-sm text-gray-500">Tipo</div>
-            <div className="font-medium capitalize">{order.delivery_type}</div>
-          </div>
-        </div>
-
-        {order.delivery_address && (
-          <div className="flex items-start gap-3 pt-2">
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-              <MapPin className="w-5 h-5 text-gray-600" />
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Endereço</div>
-              <div className="font-medium">{order.delivery_address}</div>
-            </div>
-          </div>
+        {pedido.data_festiva && (
+          <p className="text-sm text-rose-800 flex items-center gap-1"><PartyPopper className="w-4 h-4" aria-hidden="true" /> Entrega em data festiva</p>
         )}
       </Card>
 
-      {/* Items */}
-      <Card className="p-4">
-        <h3 className="font-semibold text-gray-900 mb-4">Itens do Pedido</h3>
-        <div className="space-y-3">
-          {order.items?.map((item, index) => (
-            <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-              <div>
-                <div className="font-medium">{item.product_name}</div>
-                <div className="text-sm text-gray-500">
-                  {item.quantity}x R$ {(item.unit_price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </div>
-                {item.notes && (
-                  <div className="text-sm text-gray-400 italic">{item.notes}</div>
-                )}
-              </div>
-              <div className="font-semibold">
-                R$ {(item.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-          ))}
+      <Card className="p-4 space-y-3">
+        <h2 className="font-semibold text-gray-900">Cliente</h2>
+        <p className="font-medium">{pedido.cliente_nome}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="h-11">
+            <a href={`tel:${pedido.cliente_telefone}`}><Phone className="w-4 h-4 mr-2" /> {pedido.cliente_telefone}</a>
+          </Button>
+          <Button asChild variant="outline" className="h-11">
+            <a href={linkWhatsApp(pedido.cliente_telefone)} target="_blank" rel="noreferrer"><MessageCircle className="w-4 h-4 mr-2" /> WhatsApp</a>
+          </Button>
+          <Button asChild variant="outline" className="h-11">
+            <a href={linkWhatsApp(pedido.cliente_telefone, mensagemResumoPedido(pedido, config))} target="_blank" rel="noreferrer">
+              <Send className="w-4 h-4 mr-2" /> Enviar resumo
+            </a>
+          </Button>
+          {pedido.status === 'pronto' && (
+            <Button asChild variant="outline" className="h-11">
+              <a href={linkWhatsApp(pedido.cliente_telefone, mensagemPedidoPronto())} target="_blank" rel="noreferrer">
+                <Bell className="w-4 h-4 mr-2" /> Avisar que está pronto
+              </a>
+            </Button>
+          )}
         </div>
       </Card>
 
-      {/* Payment Summary */}
-      <Card className="p-4">
-        <h3 className="font-semibold text-gray-900 mb-4">Pagamento</h3>
-        
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Subtotal</span>
-            <span>R$ {(order.items_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-          </div>
-          
-          {order.freight_value > 0 && (
-            <div className="flex justify-between text-sm">
-              <span>Frete</span>
-              <span>R$ {(order.freight_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-            </div>
-          )}
-          
-          <div className="flex justify-between text-lg font-bold pt-2 border-t">
-            <span>Total</span>
-            <span>R$ {(order.total_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-          </div>
-          
-          <div className="flex justify-between text-sm text-green-600">
-            <span>Pago</span>
-            <span>R$ {(order.paid_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-          </div>
-          
-          {(order.balance || 0) > 0 && (
-            <div className="flex justify-between text-sm font-medium text-amber-600">
-              <span>Saldo</span>
-              <span>R$ {(order.balance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-            </div>
-          )}
-        </div>
-
-        <Button 
-          className="w-full mt-4 bg-emerald-500 hover:bg-emerald-600"
-          onClick={() => {
-            setPaymentData({ amount: (order.balance || 0).toString(), method: 'pix' });
-            setShowPaymentDialog(true);
-          }}
-          disabled={(order.balance || 0) <= 0}
-        >
-          <DollarSign className="w-4 h-4 mr-2" />
-          Registrar Pagamento
-        </Button>
+      <Card className="p-4 space-y-1">
+        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+          <IconeEntrega className="w-5 h-5" aria-hidden="true" /> {pedido.tipo_entrega === 'entrega' ? 'Entrega' : 'Retirada'}
+        </h2>
+        <p>{dataLonga(pedido.data_entrega)}</p>
+        <p className="text-gray-700">{pedido.hora_entrega ? `às ${pedido.hora_entrega}` : 'Horário a combinar'}</p>
+        {pedido.endereco_entrega && <p className="text-gray-700">{pedido.endereco_entrega}</p>}
+        {pedido.observacoes && <p className="text-sm text-gray-600 pt-2">Obs.: {pedido.observacoes}</p>}
       </Card>
 
-      {/* Notes */}
-      {order.notes && (
-        <Card className="p-4">
-          <h3 className="font-semibold text-gray-900 mb-2">Observações</h3>
-          <p className="text-gray-600">{order.notes}</p>
-        </Card>
-      )}
+      <Card className="p-4 space-y-2 text-sm">
+        <h2 className="font-semibold text-gray-900 text-base">Itens</h2>
+        {pedido.itens.map((i) => (
+          <Linha key={i.id} rotulo={`${numero(i.quantidade)}x ${i.produto_nome} (${moeda(i.preco_unitario)})`} valor={moeda(i.subtotal)} />
+        ))}
+        <div className="border-t pt-2 space-y-1">
+          <Linha rotulo="Itens" valor={moeda(pedido.valor_itens)} />
+          {pedido.valor_frete > 0 && <Linha rotulo="Frete" valor={moeda(pedido.valor_frete)} />}
+          {desconto > 0.004 && <Linha rotulo="Desconto" valor={`- ${moeda(desconto)}`} classe="text-green-800" />}
+          <Linha rotulo="Total" valor={moeda(pedido.valor_total)} classe="text-lg font-bold text-gray-900" />
+        </div>
+      </Card>
 
-      {/* Status Change */}
-      <Card className="p-4">
-        <h3 className="font-semibold text-gray-900 mb-4">Alterar Status</h3>
-        <Select value={order.status} onValueChange={handleStatusChange}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(statusConfig).map(([value, config]) => (
-              <SelectItem key={value} value={value}>
-                {config.label}
-              </SelectItem>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900">Pagamentos</h2>
+          {pedido.saldo > 0 && pedido.status !== 'cancelado' && (
+            <Button className="h-11 bg-rose-600 hover:bg-rose-700"
+              onClick={() => setPagamento({ valor: String(pedido.saldo).replace('.', ','), forma: 'pix', data: format(new Date(), 'yyyy-MM-dd') })}>
+              <Wallet className="w-4 h-4 mr-2" /> Registrar pagamento
+            </Button>
+          )}
+        </div>
+        {pedido.pagamentos.length === 0 ? (
+          <p className="text-sm text-gray-600">Nenhum pagamento registrado.</p>
+        ) : (
+          <ul className="text-sm space-y-1">
+            {pedido.pagamentos.map((p) => (
+              <li key={p.id} className="flex items-center justify-between">
+                <span>{format(parseISO(p.data), 'dd/MM/yyyy')} · {FORMAS_PAGAMENTO[p.forma]}</span>
+                <span className="flex items-center gap-1">
+                  {moeda(p.valor)}
+                  <Button variant="ghost" size="icon" className="h-10 w-10" aria-label={`Remover pagamento de ${moeda(p.valor)}`}
+                    onClick={() => setConfirmar({ pagamento: p })}>
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </Button>
+                </span>
+              </li>
             ))}
-          </SelectContent>
-        </Select>
+          </ul>
+        )}
+        <div className="border-t pt-2 text-sm space-y-1">
+          <Linha rotulo="Pago" valor={moeda(pedido.valor_pago)} classe="text-green-800" />
+          <Linha rotulo="Saldo a receber" valor={moeda(pedido.saldo)} classe={pedido.saldo > 0 ? 'font-semibold text-orange-800' : ''} />
+        </div>
       </Card>
 
-      {/* Delete */}
-      <Button 
-        variant="outline" 
-        className="w-full text-red-600 border-red-200 hover:bg-red-50"
-        onClick={() => setShowDeleteDialog(true)}
-      >
-        <Trash2 className="w-4 h-4 mr-2" />
-        Excluir Pedido
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-3">
+        {podeCancelar && (
+          <Button variant="outline" className="h-11 flex-1 text-red-700 border-red-300" onClick={() => setConfirmar('cancelar')}>
+            Cancelar pedido
+          </Button>
+        )}
+        {podeExcluir && (
+          <Button variant="outline" className="h-11 flex-1 text-red-700 border-red-300" onClick={() => setConfirmar('excluir')}>
+            <Trash2 className="w-4 h-4 mr-2" /> Excluir
+          </Button>
+        )}
+      </div>
 
-      {/* Payment Dialog */}
-      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Registrar Pagamento</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div>
-              <Label>Valor (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={paymentData.amount}
-                onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                placeholder="0,00"
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Saldo pendente: R$ {(order.balance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-            
-            <div>
-              <Label>Forma de Pagamento</Label>
-              <Select 
-                value={paymentData.method} 
-                onValueChange={(value) => setPaymentData({ ...paymentData, method: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="cartao">Cartão</SelectItem>
-                  <SelectItem value="transferencia">Transferência</SelectItem>
-                  <SelectItem value="outro">Outro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setShowPaymentDialog(false)}>
-                Cancelar
-              </Button>
-              <Button
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
-                disabled={!paymentData.amount || parseFloat(paymentData.amount) <= 0}
-                onClick={handlePayment}
-              >
-                Confirmar
-              </Button>
-            </div>
-          </div>
+      <Dialog open={!!pagamento} onOpenChange={(a) => !a && setPagamento(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>Registrar pagamento</DialogTitle></DialogHeader>
+          {pagamento && (
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); pagar.mutate(pagamento); }}>
+              <p className="text-sm text-gray-700">Saldo a receber: <strong>{moeda(pedido.saldo)}</strong></p>
+              <div>
+                <Label htmlFor="valor-pagamento">Valor (R$) *</Label>
+                <Input id="valor-pagamento" inputMode="decimal" value={pagamento.valor} required
+                  onChange={(e) => setPagamento({ ...pagamento, valor: e.target.value })} />
+              </div>
+              <div>
+                <Label htmlFor="forma-pagamento">Forma de pagamento</Label>
+                <Select value={pagamento.forma} onValueChange={(forma) => setPagamento({ ...pagamento, forma })}>
+                  <SelectTrigger id="forma-pagamento" className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(FORMAS_PAGAMENTO).map(([v, r]) => <SelectItem key={v} value={v}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="data-pagamento">Data</Label>
+                <Input id="data-pagamento" type="date" value={pagamento.data} onChange={(e) => setPagamento({ ...pagamento, data: e.target.value })} />
+              </div>
+              <BotoesFormulario salvando={pagar.isPending} aoCancelar={() => setPagamento(null)} rotulo="Registrar" />
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir pedido?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. O pedido será removido permanentemente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteOrderMutation.mutate(orderId)}
-              className="bg-red-500 hover:bg-red-600"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmarExclusao
+        aberto={!!confirmar}
+        titulo={confirmar === 'cancelar' ? 'Cancelar este pedido?' : confirmar === 'excluir' ? 'Excluir este pedido?' : 'Remover este pagamento?'}
+        descricao={confirmar === 'cancelar'
+          ? 'O pedido sai das calculadoras e dos relatórios, mas continua no histórico.'
+          : 'Esta ação não pode ser desfeita.'}
+        aoConfirmar={() => {
+          if (confirmar === 'cancelar') mudarStatus.mutate('cancelado');
+          else if (confirmar === 'excluir') excluir.mutate();
+          else removerPagamento.mutate(confirmar.pagamento.id);
+        }}
+        aoCancelar={() => setConfirmar(null)}
+        rotuloConfirmar={confirmar === 'cancelar' ? 'Cancelar pedido' : confirmar === 'excluir' ? 'Excluir' : 'Remover'}
+      />
     </div>
   );
 }

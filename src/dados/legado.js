@@ -1,10 +1,9 @@
 // Acesso TEMPORÁRIO às tabelas do protótipo que ainda guardam cada registro como JSON
-// (pedidos e despesas).
+// (despesas, migradas no Sprint 4).
 // Cada sprint migra uma parte para tabelas relacionais; este arquivo deixa de existir no Sprint 4.
 import { consultar, executar, gerarId, agoraIso } from './conexao';
 
 const TABELAS = {
-  Order: 'orders',
   Expense: 'expenses',
 };
 

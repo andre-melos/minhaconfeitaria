@@ -1,189 +1,105 @@
-import { db } from '@/dados/legado';
-
-import React, { useState, useMemo } from 'react';
-
-import { useQuery } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Plus, Search, ShoppingBag, Loader2 } from 'lucide-react';
-import OrderCard from '../components/orders/OrderCard';
-import EstadoVazio from '@/components/comum/EstadoVazio';
+// Lista de pedidos (UC10)
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Plus, Search, ShoppingBag, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import CabecalhoPagina from '@/components/comum/CabecalhoPagina';
+import Carregando from '@/components/comum/Carregando';
+import EstadoVazio from '@/components/comum/EstadoVazio';
+import CartaoPedido from '@/components/pedidos/CartaoPedido';
+import { pedidoServico } from '@/servicos/pedidoServico';
+import { estaEmAndamento } from '@/servicos/regrasPedido';
 
-export default function Orders() {
-  const [parametros] = useSearchParams();
-  const clientFilter = parametros.get('cliente') || '';
-  
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('active');
-  const [sortBy, setSortBy] = useState('delivery_date');
+const FILTROS = {
+  ativos: { rotulo: 'Em andamento', teste: (p) => estaEmAndamento(p.status) },
+  nao_pagos: { rotulo: 'Não pagos', teste: (p) => p.status === 'entregue_nao_pago' },
+  entregues: { rotulo: 'Entregues', teste: (p) => p.status === 'entregue' },
+  cancelados: { rotulo: 'Cancelados', teste: (p) => p.status === 'cancelado' },
+  todos: { rotulo: 'Todos', teste: () => true },
+};
 
-  const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['orders'],
-    queryFn: () => db.entities.Order.list('-delivery_date')
+const ORDENS = {
+  proximas: { rotulo: 'Entrega (mais próximas)', comparar: (a, b) => (a.data_entrega + (a.hora_entrega ?? '')).localeCompare(b.data_entrega + (b.hora_entrega ?? '')) },
+  recentes: { rotulo: 'Entrega (mais recentes)', comparar: (a, b) => b.data_entrega.localeCompare(a.data_entrega) },
+  valor: { rotulo: 'Maior valor', comparar: (a, b) => b.valor_total - a.valor_total },
+};
+
+export default function Pedidos() {
+  const [parametros, setParametros] = useSearchParams();
+  const clienteId = parametros.get('cliente') || undefined;
+  const [filtro, setFiltro] = useState('ativos');
+  const [ordem, setOrdem] = useState('proximas');
+  const [busca, setBusca] = useState('');
+
+  const { data: pedidos = [], isLoading } = useQuery({
+    queryKey: ['pedidos', { clienteId }],
+    queryFn: () => pedidoServico.listar({ clienteId }),
   });
 
-  const filteredOrders = useMemo(() => {
-    let result = orders;
+  const visiveis = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return pedidos
+      .filter(FILTROS[filtro].teste)
+      .filter((p) => !termo || p.cliente_nome.toLowerCase().includes(termo) || p.cliente_telefone.includes(termo))
+      .sort(ORDENS[ordem].comparar);
+  }, [pedidos, filtro, ordem, busca]);
 
-    // Client filter from URL
-    if (clientFilter) {
-      result = result.filter(o => o.client_id === clientFilter);
-    }
-
-    // Search
-    if (search) {
-      const searchLower = search.toLowerCase();
-      result = result.filter(o =>
-        o.client_name?.toLowerCase().includes(searchLower) ||
-        o.client_phone?.includes(search)
-      );
-    }
-
-    // Status filter
-    if (statusFilter === 'active') {
-      result = result.filter(o => !['entregue', 'entregue_nao_pago', 'cancelado'].includes(o.status));
-    } else if (statusFilter === 'entregue_nao_pago') {
-      result = result.filter(o => o.status === 'entregue_nao_pago');
-    } else if (statusFilter === 'entregue') {
-      result = result.filter(o => o.status === 'entregue');
-    } else if (statusFilter !== 'all') {
-      result = result.filter(o => o.status === statusFilter);
-    }
-
-    // Sorting
-    result = [...result].sort((a, b) => {
-      if (sortBy === 'delivery_date') {
-        return (a.delivery_date || '').localeCompare(b.delivery_date || '');
-      }
-      if (sortBy === '-delivery_date') {
-        return (b.delivery_date || '').localeCompare(a.delivery_date || '');
-      }
-      if (sortBy === 'total_value') {
-        return (b.total_value || 0) - (a.total_value || 0);
-      }
-      return 0;
-    });
-
-    return result;
-  }, [orders, search, statusFilter, sortBy, clientFilter]);
-
-  // Group by date
-  const groupedOrders = useMemo(() => {
-    const groups = {};
-    filteredOrders.forEach(order => {
-      const date = order.delivery_date || 'Sem data';
-      if (!groups[date]) {
-        groups[date] = [];
-      }
-      groups[date].push(order);
-    });
-    return groups;
-  }, [filteredOrders]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-rose-500" />
-      </div>
-    );
-  }
+  if (isLoading) return <Carregando />;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pedidos</h1>
-          <p className="text-gray-500">
-            {filteredOrders.length} pedido{filteredOrders.length !== 1 ? 's' : ''}
-            {clientFilter && ' deste cliente'}
-          </p>
-        </div>
-        
-        <Link to={'/pedidos/novo'}>
-          <Button className="bg-rose-500 hover:bg-rose-600">
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Pedido
-          </Button>
-        </Link>
-      </div>
+      <CabecalhoPagina titulo="Pedidos" subtitulo={`${pedidos.length} pedido(s)`}>
+        <Button asChild className="h-11 bg-rose-600 hover:bg-rose-700">
+          <Link to="/pedidos/novo"><Plus className="w-4 h-4 mr-2" /> Novo pedido</Link>
+        </Button>
+      </CabecalhoPagina>
 
-      {/* Filters */}
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <Input
-            placeholder="Buscar por cliente ou telefone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
+      {clienteId && (
+        <div className="flex items-center gap-2 text-sm bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          <span>Mostrando os pedidos de <strong>{pedidos[0]?.cliente_nome ?? 'um cliente'}</strong>.</span>
+          <Button variant="ghost" size="sm" className="ml-auto h-9" onClick={() => setParametros({})}>
+            <X className="w-4 h-4 mr-1" /> Ver todos
+          </Button>
         </div>
-        
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Tabs value={statusFilter} onValueChange={setStatusFilter} className="flex-1">
-            <TabsList className="w-full bg-gray-100 flex-wrap h-auto gap-1">
-              <TabsTrigger value="active" className="flex-1">Ativos</TabsTrigger>
-              <TabsTrigger value="all" className="flex-1">Todos</TabsTrigger>
-              <TabsTrigger value="entregue" className="flex-1">Entregues</TabsTrigger>
-              <TabsTrigger value="entregue_nao_pago" className="flex-1 text-amber-700 data-[state=active]:text-amber-700 data-[state=active]:bg-amber-50">
-                Entregue e não pago
+      )}
+
+      <div className="space-y-3">
+        <Tabs value={filtro} onValueChange={setFiltro}>
+          <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 h-auto">
+            {Object.entries(FILTROS).map(([chave, f]) => (
+              <TabsTrigger key={chave} value={chave} className="py-2">
+                {f.rotulo} ({pedidos.filter(f.teste).length})
               </TabsTrigger>
-              <TabsTrigger value="cancelado" className="flex-1">Cancelados</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Ordenar" />
-            </SelectTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" aria-hidden="true" />
+            <Input aria-label="Buscar por cliente" placeholder="Buscar por cliente ou telefone..." value={busca}
+              onChange={(e) => setBusca(e.target.value)} className="pl-10 h-11" />
+          </div>
+          <Select value={ordem} onValueChange={setOrdem}>
+            <SelectTrigger className="sm:w-56 h-11" aria-label="Ordenar"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="delivery_date">Entrega (próximas)</SelectItem>
-              <SelectItem value="-delivery_date">Entrega (recentes)</SelectItem>
-              <SelectItem value="total_value">Maior valor</SelectItem>
+              {Object.entries(ORDENS).map(([chave, o]) => <SelectItem key={chave} value={chave}>{o.rotulo}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Orders List */}
-      {filteredOrders.length === 0 ? (
-        <EstadoVazio
-          icone={ShoppingBag}
-          titulo={search || statusFilter !== 'active' ? "Nenhum pedido encontrado" : "Nenhum pedido ativo"}
-          descricao={search || statusFilter !== 'active' ? "Tente outro filtro" : "Crie seu primeiro pedido"}
-          rotuloAcao={!search && statusFilter === 'active' ? "Novo Pedido" : undefined}
-          rotaAcao={!search && statusFilter === 'active' ? "/pedidos/novo" : undefined}
-        />
+      {visiveis.length === 0 ? (
+        <EstadoVazio icone={ShoppingBag} titulo="Nenhum pedido encontrado"
+          descricao={pedidos.length === 0 ? 'Registre o primeiro pedido.' : 'Mude o filtro ou a busca.'}
+          rotuloAcao={pedidos.length === 0 ? 'Novo pedido' : undefined} rotaAcao="/pedidos/novo" />
       ) : (
-        <div className="space-y-6">
-          {Object.entries(groupedOrders).map(([date, dateOrders]) => (
-            <div key={date}>
-              <h3 className="text-sm font-medium text-gray-500 mb-3 px-1">
-                {date !== 'Sem data' 
-                  ? format(parseISO(date), "EEEE, d 'de' MMMM", { locale: ptBR })
-                  : 'Sem data definida'
-                }
-              </h3>
-              <div className="space-y-3">
-                {dateOrders.map(order => (
-                  <OrderCard key={order.id} order={order} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <ul className="grid gap-3">
+          {visiveis.map((p) => <li key={p.id}><CartaoPedido pedido={p} mostrarData /></li>)}
+        </ul>
       )}
     </div>
   );

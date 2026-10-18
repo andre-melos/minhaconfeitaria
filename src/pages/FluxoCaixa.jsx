@@ -1,5 +1,5 @@
 import { db } from '@/dados/legado';
-import { produtosNoFormatoAntigo } from '@/servicos/compatibilidadePrototipo';
+import { pedidosNoFormatoAntigo, produtosNoFormatoAntigo } from '@/servicos/compatibilidadePrototipo';
 
 import React, { useState, useMemo } from 'react';
 
@@ -75,7 +75,7 @@ export default function CashFlow() {
 
   const { data: orders = [], isLoading: loadingOrders } = useQuery({
     queryKey: ['orders'],
-    queryFn: () => db.entities.Order.list('-delivery_date')
+    queryFn: pedidosNoFormatoAntigo
   });
 
   const { data: products = [] } = useQuery({

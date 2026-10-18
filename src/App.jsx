@@ -5,9 +5,8 @@ import BloqueioPin from '@/components/BloqueioPin';
 import Layout from '@/components/Layout';
 import Agenda from '@/pages/Agenda';
 import Pedidos from '@/pages/Pedidos';
-import NovoPedido from '@/pages/NovoPedido';
+import FormularioPedido from '@/pages/FormularioPedido';
 import DetalhesPedido from '@/pages/DetalhesPedido';
-import EditarPedido from '@/pages/EditarPedido';
 import Clientes from '@/pages/Clientes';
 import Produtos from '@/pages/Produtos';
 import Insumos from '@/pages/Insumos';
@@ -37,9 +36,9 @@ export default function App() {
               <Route index element={<Navigate to="/agenda" replace />} />
               <Route path="agenda" element={<Agenda />} />
               <Route path="pedidos" element={<Pedidos />} />
-              <Route path="pedidos/novo" element={<NovoPedido />} />
+              <Route path="pedidos/novo" element={<FormularioPedido />} />
               <Route path="pedidos/:id" element={<DetalhesPedido />} />
-              <Route path="pedidos/:id/editar" element={<EditarPedido />} />
+              <Route path="pedidos/:id/editar" element={<FormularioPedido key="editar" />} />
               <Route path="clientes" element={<Clientes />} />
               <Route path="produtos" element={<Produtos />} />
               <Route path="insumos" element={<Insumos />} />

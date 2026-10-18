@@ -1,7 +1,7 @@
 // UC04 – Manter Produtos (ficha técnica), UC05 – Revisar Preços, RF04 – recálculo automático
 import { produtoRepositorio } from '@/dados/repositorios/produtoRepositorio';
 import { insumoRepositorio } from '@/dados/repositorios/insumoRepositorio';
-import { lerLegado } from '@/dados/legado';
+import { pedidoRepositorio } from '@/dados/repositorios/pedidoRepositorio';
 import { agoraIso, gerarId } from '@/dados/conexao';
 import { ErroDeNegocio, exigirNumero, exigirTexto, textoLimpo } from './erros';
 import { calcularCustosProduto, criaCiclo, produtosAbaixoDoSugerido } from './custoServico';
@@ -192,8 +192,7 @@ export const produtoServico = {
     if (await produtoRepositorio.contarUsoComoComponente(id)) {
       throw new ErroDeNegocio('Este produto é componente de outro produto. Remova-o da outra ficha técnica ou inative-o.');
     }
-    const pedidos = await lerLegado('Order');
-    if (pedidos.some((p) => (p.items || []).some((i) => i.product_id === id))) {
+    if (await pedidoRepositorio.contarItensDoProduto(id)) {
       throw new ErroDeNegocio('Este produto aparece em pedidos e não pode ser excluído. Inative-o.');
     }
     await produtoRepositorio.excluir(id);

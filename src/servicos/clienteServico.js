@@ -1,6 +1,6 @@
 // UC01 – Manter Clientes (RF01)
 import { clienteRepositorio } from '@/dados/repositorios/clienteRepositorio';
-import { lerLegado } from '@/dados/legado';
+import { pedidoRepositorio } from '@/dados/repositorios/pedidoRepositorio';
 import { gerarId, agoraIso } from '@/dados/conexao';
 import { ErroDeNegocio, exigirTexto, textoLimpo } from './erros';
 
@@ -39,9 +39,8 @@ export const clienteServico = {
   },
 
   /** Quantidade de pedidos de cada cliente: { [clienteId]: total } */
-  async contarPedidosPorCliente() {
-    const pedidos = await lerLegado('Order');
-    return pedidos.reduce((mapa, p) => ({ ...mapa, [p.client_id]: (mapa[p.client_id] || 0) + 1 }), {});
+  contarPedidosPorCliente() {
+    return pedidoRepositorio.contarPorCliente();
   },
 
   async excluir(id) {

@@ -1,4 +1,3 @@
-import { db } from '@/dados/legado';
 
 import React, { useState, useMemo } from 'react';
 
@@ -16,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, TrendingUp, TrendingDown, DollarSign, ShoppingBag } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { categoriasNoFormatoAntigo, produtosNoFormatoAntigo } from '@/servicos/compatibilidadePrototipo';
+import { categoriasNoFormatoAntigo, pedidosNoFormatoAntigo, produtosNoFormatoAntigo } from '@/servicos/compatibilidadePrototipo';
 
 const COLORS = ['#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#64748b'];
 
@@ -27,7 +26,7 @@ export default function Reports() {
 
   const { data: orders = [], isLoading: loadingOrders } = useQuery({
     queryKey: ['orders'],
-    queryFn: () => db.entities.Order.list('-delivery_date')
+    queryFn: pedidosNoFormatoAntigo
   });
 
   const { data: dbCategories = [] } = useQuery({

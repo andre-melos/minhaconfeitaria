@@ -91,6 +91,9 @@ export function iniciarBanco() {
     if (tarefas.includes('recalcular-custos')) {
       const { produtoServico } = await import('@/servicos/produtoServico');
       await produtoServico.recalcularTodos();
+      // Itens de pedidos migrados antes do cálculo dos custos recebem o custo atual do produto.
+      await executar(`UPDATE item_pedido SET custo_unitario = (SELECT custo_unitario FROM produto WHERE produto.id = item_pedido.produto_id)
+        WHERE custo_unitario = 0 AND EXISTS (SELECT 1 FROM sqlite_master WHERE name = 'item_pedido')`).catch(() => {});
     }
     await persistirWeb();
   })();

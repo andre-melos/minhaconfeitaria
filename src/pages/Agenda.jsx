@@ -1,307 +1,164 @@
-import { db } from '@/dados/legado';
-
-import React, { useState } from 'react';
-
+// UC11 – Consultar Agenda (dia, semana e mês), com datas festivas e fins de semana destacados (RN17)
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay, isSameMonth, isWeekend, addMonths } from 'date-fns';
+import {
+  addDays, addMonths, addWeeks, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, isWeekend, startOfMonth, startOfWeek,
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronLeft, ChevronRight, Calendar, Loader2, AlertTriangle } from 'lucide-react';
-import OrderCard from '../components/orders/OrderCard';
+import { ChevronLeft, ChevronRight, CalendarDays, PartyPopper, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import Carregando from '@/components/comum/Carregando';
 import EstadoVazio from '@/components/comum/EstadoVazio';
-import { datasFestivasNoFormatoAntigo } from '@/servicos/compatibilidadePrototipo';
+import CartaoPedido from '@/components/pedidos/CartaoPedido';
+import { pedidoServico } from '@/servicos/pedidoServico';
+import { dataFestivaServico, encontrarDataFestiva } from '@/servicos/dataFestivaServico';
+import { STATUS_PEDIDO } from '@/servicos/regrasPedido';
+import { moeda } from '@/lib/formatacao';
+
+const iso = (d) => format(d, 'yyyy-MM-dd');
+const OPCOES_SEMANA = { weekStartsOn: 0, locale: ptBR };
+
+function periodo(visao, data) {
+  if (visao === 'dia') return [data, data];
+  if (visao === 'semana') return [startOfWeek(data, OPCOES_SEMANA), endOfWeek(data, OPCOES_SEMANA)];
+  return [startOfWeek(startOfMonth(data), OPCOES_SEMANA), endOfWeek(endOfMonth(data), OPCOES_SEMANA)];
+}
 
 export default function Agenda() {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState('week');
+  const [visao, setVisao] = useState('semana');
+  const [data, setData] = useState(new Date());
+  const [status, setStatus] = useState('todos');
+  const [inicio, fim] = periodo(visao, data);
 
-  const { data: orders = [], isLoading: loadingOrders } = useQuery({
-    queryKey: ['orders'],
-    queryFn: () => db.entities.Order.list('-delivery_date')
+  const { data: pedidos = [], isLoading } = useQuery({
+    queryKey: ['pedidos', 'agenda', iso(inicio), iso(fim)],
+    queryFn: () => pedidoServico.listar({ inicio: iso(inicio), fim: iso(fim) }),
   });
+  const { data: datasFestivas = [] } = useQuery({ queryKey: ['datas-festivas'], queryFn: dataFestivaServico.listar });
 
-  const { data: holidays = [] } = useQuery({
-    queryKey: ['holidays'],
-    queryFn: () => datasFestivasNoFormatoAntigo()
-  });
+  const doDia = useMemo(() => {
+    const visiveis = pedidos.filter((p) => (status === 'todos' ? p.status !== 'cancelado' : p.status === status));
+    return (dia) => visiveis.filter((p) => p.data_entrega === iso(dia));
+  }, [pedidos, status]);
 
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const mover = (sentido) => setData((d) => (visao === 'dia' ? addDays(d, sentido) : visao === 'semana' ? addWeeks(d, sentido) : addMonths(d, sentido)));
+  const maiuscula = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const titulo = visao === 'dia'
+    ? format(data, "EEEE, dd 'de' MMMM", { locale: ptBR })
+    : visao === 'semana' ? `${format(inicio, 'dd MMM', { locale: ptBR })} – ${format(fim, 'dd MMM', { locale: ptBR })}`
+      : format(data, 'MMMM yyyy', { locale: ptBR });
+  const dias = [];
+  for (let d = inicio; d <= fim; d = addDays(d, 1)) dias.push(d);
 
-  const isHoliday = (date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    return holidays.some(h => {
-      if (h.recurring) {
-        return h.date.slice(5) === dateStr.slice(5);
-      }
-      return h.date === dateStr;
-    });
+  const Festiva = ({ dia }) => {
+    const festa = encontrarDataFestiva(datasFestivas, iso(dia));
+    return festa ? <span className="text-xs text-rose-800 flex items-center gap-1"><PartyPopper className="w-3 h-3" aria-hidden="true" />{festa.nome}</span> : null;
   };
-
-  const getHolidayName = (date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const holiday = holidays.find(h => {
-      if (h.recurring) {
-        return h.date.slice(5) === dateStr.slice(5);
-      }
-      return h.date === dateStr;
-    });
-    return holiday?.name;
-  };
-
-  const getOrdersForDate = (date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    return orders.filter(o => o.delivery_date === dateStr && o.status !== 'cancelado');
-  };
-
-  const todayOrders = getOrdersForDate(currentDate);
-  const todayHoliday = getHolidayName(currentDate);
-
-  const navigateDate = (direction) => {
-    if (view === 'day') {
-      setCurrentDate(prev => addDays(prev, direction));
-    } else if (view === 'week') {
-      setCurrentDate(prev => addDays(prev, direction * 7));
-    } else {
-      setCurrentDate(prev => addMonths(prev, direction));
-    }
-  };
-
-  const goToToday = () => setCurrentDate(new Date());
-
-  if (loadingOrders) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-rose-500" />
-      </div>
-    );
-  }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="max-w-5xl mx-auto space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Agenda</h1>
-          <p className="text-gray-500">Gerencie seus pedidos do dia</p>
+          <p className="text-gray-600">Pedidos por data de entrega</p>
         </div>
-        
-        <div className="flex items-center gap-2">
-          <Tabs value={view} onValueChange={setView}>
-            <TabsList className="bg-gray-100">
-              <TabsTrigger value="day">Dia</TabsTrigger>
-              <TabsTrigger value="week">Semana</TabsTrigger>
-              <TabsTrigger value="month">Mês</TabsTrigger>
-            </TabsList>
+        <div className="flex gap-2 flex-wrap">
+          <Tabs value={visao} onValueChange={setVisao}>
+            <TabsList><TabsTrigger value="dia">Dia</TabsTrigger><TabsTrigger value="semana">Semana</TabsTrigger><TabsTrigger value="mes">Mês</TabsTrigger></TabsList>
           </Tabs>
-          
-          <Button variant="outline" size="sm" onClick={goToToday}>
-            Hoje
-          </Button>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="w-48 h-10" aria-label="Filtrar por status"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos (exceto cancelados)</SelectItem>
+              {Object.entries(STATUS_PEDIDO).map(([v, r]) => <SelectItem key={v} value={v}>{r}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <Button variant="ghost" size="icon" onClick={() => navigateDate(-1)}>
-          <ChevronLeft className="w-5 h-5" />
-        </Button>
-        
+      <Card className="p-3 flex items-center justify-between">
+        <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => mover(-1)} aria-label="Anterior"><ChevronLeft /></Button>
         <div className="text-center">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {view === 'day' 
-              ? format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })
-              : view === 'week'
-              ? `${format(weekStart, "d MMM", { locale: ptBR })} - ${format(addDays(weekStart, 6), "d MMM", { locale: ptBR })}`
-              : format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })
-            }
-          </h2>
-          {view === 'day' && todayHoliday && (
-            <span className="text-sm text-rose-600 font-medium">🎉 {todayHoliday}</span>
-          )}
+          <p className="font-semibold">{maiuscula(titulo)}</p>
+          <Button variant="link" className="h-7 text-rose-700" onClick={() => setData(new Date())}>Hoje</Button>
         </div>
-        
-        <Button variant="ghost" size="icon" onClick={() => navigateDate(1)}>
-          <ChevronRight className="w-5 h-5" />
-        </Button>
-      </div>
+        <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => mover(1)} aria-label="Próximo"><ChevronRight /></Button>
+      </Card>
 
-      {view === 'day' ? (
-        /* Day View */
-        <div className="space-y-3">
-          {todayOrders.length === 0 ? (
-            <EstadoVazio
-              icone={Calendar}
-              titulo="Nenhum pedido para este dia"
-              descricao="Adicione um novo pedido para começar"
-              rotuloAcao="Novo Pedido"
-              rotaAcao="/pedidos/novo"
-            />
-          ) : (
-            <>
-              <div className="flex items-center justify-between text-sm text-gray-500 px-1">
-                <span>{todayOrders.length} pedido{todayOrders.length !== 1 ? 's' : ''}</span>
-                <span>
-                  Total: R$ {todayOrders.reduce((sum, o) => sum + (o.total_value || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              {todayOrders
-                .sort((a, b) => (a.delivery_time || '').localeCompare(b.delivery_time || ''))
-                .map(order => (
-                  <OrderCard key={order.id} order={order} />
-                ))}
-            </>
+      {isLoading ? <Carregando /> : (
+        <>
+          {visao === 'dia' && (
+            <section className="space-y-3">
+              <Festiva dia={data} />
+              {doDia(data).length === 0 ? (
+                <EstadoVazio icone={CalendarDays} titulo="Nenhum pedido neste dia" descricao="Os pedidos aparecem aqui pela data de entrega."
+                  rotuloAcao="Novo pedido" rotaAcao="/pedidos/novo" />
+              ) : (
+                <ul className="grid gap-3">{doDia(data).map((p) => <li key={p.id}><CartaoPedido pedido={p} /></li>)}</ul>
+              )}
+            </section>
           )}
-        </div>
-      ) : view === 'week' ? (
-        /* Week View */
-        <div className="grid grid-cols-1 gap-4">
-          {weekDays.map(day => {
-            const dayOrders = getOrdersForDate(day);
-            const dayHoliday = getHolidayName(day);
-            const isToday = isSameDay(day, new Date());
-            const isPeakDay = isWeekend(day) || isHoliday(day);
-            
-            return (
-              <Card 
-                key={day.toISOString()} 
-                className={`p-4 ${isToday ? 'ring-2 ring-rose-300 bg-rose-50/30' : ''} ${
-                  isPeakDay ? 'border-l-4 border-l-amber-400' : ''
-                }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-semibold ${isToday ? 'text-rose-600' : 'text-gray-900'}`}>
-                      {format(day, 'EEE, d MMM', { locale: ptBR })}
-                    </span>
-                    {dayHoliday && (
-                      <span className="text-xs bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">
-                        🎉 {dayHoliday}
-                      </span>
-                    )}
-                    {dayOrders.length >= 5 && (
-                      <span className="flex items-center gap-1 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                        <AlertTriangle className="w-3 h-3" />
-                        Pico
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-sm text-gray-500">
-                    {dayOrders.length} pedido{dayOrders.length !== 1 ? 's' : ''}
-                  </span>
-                </div>
-                
-                {dayOrders.length > 0 ? (
-                  <div className="space-y-2">
-                    {dayOrders
-                      .sort((a, b) => (a.delivery_time || '').localeCompare(b.delivery_time || ''))
-                      .slice(0, 3)
-                      .map(order => (
-                        <OrderCard key={order.id} order={order} compact />
-                      ))}
-                    {dayOrders.length > 3 && (
-                      <p className="text-sm text-gray-500 text-center pt-2">
-                        +{dayOrders.length - 3} pedido{dayOrders.length - 3 !== 1 ? 's' : ''}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400 text-center py-4">Sem pedidos</p>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        /* Month View */
-        <div className="space-y-4">
-          {/* Day headers */}
-          <div className="grid grid-cols-7 gap-1">
-            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
-              <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
-                {day}
-              </div>
-            ))}
-          </div>
-          
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1">
-            {(() => {
-              const monthStart = startOfMonth(currentDate);
-              const monthEnd = endOfMonth(currentDate);
-              const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
-              const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
-              
-              const days = [];
-              let day = calendarStart;
-              
-              while (day <= calendarEnd) {
-                days.push(day);
-                day = addDays(day, 1);
-              }
-              
-              return days.map(day => {
-                const dayOrders = getOrdersForDate(day);
-                const dayHoliday = getHolidayName(day);
-                const isToday = isSameDay(day, new Date());
-                const isCurrentMonth = isSameMonth(day, currentDate);
-                
+
+          {visao === 'semana' && (
+            <ul className="grid gap-3">
+              {dias.map((dia) => {
+                const lista = doDia(dia);
+                const festa = encontrarDataFestiva(datasFestivas, iso(dia));
+                const pico = festa || isWeekend(dia);
                 return (
-                  <Card 
-                    key={day.toISOString()} 
-                    className={`p-2 min-h-[80px] cursor-pointer hover:shadow-md transition-shadow ${
-                      !isCurrentMonth ? 'bg-gray-50 opacity-50' : ''
-                    } ${isToday ? 'ring-2 ring-rose-300' : ''} ${
-                      dayHoliday ? 'bg-rose-50/50' : ''
-                    }`}
-                    onClick={() => {
-                      setCurrentDate(day);
-                      setView('day');
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`text-sm font-medium ${
-                        isToday ? 'text-rose-600' : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
-                      }`}>
-                        {format(day, 'd')}
-                      </span>
-                      {dayHoliday && (
-                        <span className="text-xs">🎉</span>
-                      )}
-                    </div>
-                    
-                    {dayOrders.length > 0 && (
-                      <div className="space-y-1">
-                        {dayOrders.slice(0, 2).map(order => (
-                          <div 
-                            key={order.id} 
-                            className={`text-xs truncate px-1 py-0.5 rounded ${
-                              order.status === 'entregue' ? 'bg-green-100 text-green-700' :
-                              order.status === 'pronto' ? 'bg-emerald-100 text-emerald-700' :
-                              order.status === 'em_producao' ? 'bg-purple-100 text-purple-700' :
-                              order.status === 'confirmado' ? 'bg-blue-100 text-blue-700' :
-                              'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {order.client_name?.split(' ')[0]}
-                          </div>
-                        ))}
-                        {dayOrders.length > 2 && (
-                          <div className="text-xs text-gray-500 text-center">
-                            +{dayOrders.length - 2}
-                          </div>
-                        )}
+                  <li key={iso(dia)}>
+                    <Card className={`p-4 ${isSameDay(dia, new Date()) ? 'ring-2 ring-rose-400' : ''} ${pico ? 'bg-rose-50/40' : ''}`}>
+                      <div className="flex justify-between items-center mb-2">
+                        <button type="button" className="font-medium text-left hover:underline"
+                          onClick={() => { setData(dia); setVisao('dia'); }}>
+                          {maiuscula(format(dia, "EEEE, dd 'de' MMM", { locale: ptBR }))}
+                        </button>
+                        <span className="text-sm text-gray-600">
+                          {lista.length} pedido(s){lista.length > 0 && ` · ${moeda(lista.reduce((s, p) => s + p.valor_total, 0))}`}
+                        </span>
                       </div>
-                    )}
-                  </Card>
+                      <Festiva dia={dia} />
+                      {lista.length > 0 && <ul className="grid gap-2 mt-2">{lista.map((p) => <li key={p.id}><CartaoPedido pedido={p} /></li>)}</ul>}
+                    </Card>
+                  </li>
                 );
-              });
-            })()}
-          </div>
-        </div>
+              })}
+            </ul>
+          )}
+
+          {visao === 'mes' && (
+            <Card className="p-2 sm:p-4">
+              <div className="grid grid-cols-7 text-center text-xs font-semibold text-gray-600 mb-1" aria-hidden="true">
+                {['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'].map((d) => <div key={d}>{d}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {dias.map((dia) => {
+                  const lista = doDia(dia);
+                  const festa = encontrarDataFestiva(datasFestivas, iso(dia));
+                  return (
+                    <button key={iso(dia)} type="button" onClick={() => { setData(dia); setVisao('dia'); }}
+                      aria-label={`${format(dia, "dd 'de' MMMM", { locale: ptBR })}: ${lista.length} pedido(s)${festa ? `, ${festa.nome}` : ''}`}
+                      className={`min-h-[64px] rounded-lg border p-1 text-left text-xs ${!isSameMonth(dia, data) ? 'bg-gray-50 text-gray-500'
+                        : festa ? 'border-rose-300 bg-rose-50' : isWeekend(dia) ? 'bg-amber-50' : 'bg-white'} ${isSameDay(dia, new Date()) ? 'ring-2 ring-rose-500' : ''}`}>
+                      <span className="font-semibold">{format(dia, 'd')}</span>
+                      {festa && <span className="block truncate text-rose-800" aria-hidden="true">🎉 {festa.nome}</span>}
+                      {lista.length > 0 && <span className="block mt-1 rounded bg-rose-600 text-white px-1">{lista.length} ped.</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+        </>
       )}
+
+      <Button asChild size="lg" className="lg:hidden fixed bottom-6 right-6 z-30 h-14 w-14 rounded-2xl bg-rose-600 hover:bg-rose-700 shadow-xl">
+        <Link to="/pedidos/novo" aria-label="Novo pedido"><Plus className="w-6 h-6" /></Link>
+      </Button>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 // UC19 – Configurar Aplicativo (margem padrão e PIN)
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Percent, KeyRound, Loader2 } from 'lucide-react';
+import { Percent, KeyRound, Loader2, MessageCircle } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,10 +19,18 @@ export default function Configuracoes() {
   const { data: config, isLoading } = useQuery({ queryKey: ['configuracao'], queryFn: configuracaoServico.obter });
   const [margem, setMargem] = useState('');
   const [pin, setPin] = useState(PIN_VAZIO);
+  const [mensagens, setMensagens] = useState({ endereco_retirada: '', mensagem_pagamento: '' });
 
   useEffect(() => {
-    if (config) setMargem(String(config.margem_padrao));
+    if (config) {
+      setMargem(String(config.margem_padrao));
+      setMensagens({ endereco_retirada: config.endereco_retirada, mensagem_pagamento: config.mensagem_pagamento });
+    }
   }, [config]);
+
+  const salvarMensagens = useAcao((m) => configuracaoServico.salvarMensagens(m), {
+    invalidar: ['configuracao'], mensagemSucesso: 'Mensagens salvas.',
+  });
 
   const salvarMargem = useAcao((valor) => configuracaoServico.salvarMargemPadrao(valor), {
     invalidar: ['configuracao'], mensagemSucesso: 'Margem padrão salva.',
@@ -49,6 +58,27 @@ export default function Configuracoes() {
           <Button type="submit" className="h-10 bg-rose-600 hover:bg-rose-700" disabled={salvarMargem.isPending}>
             {salvarMargem.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Salvar
           </Button>
+        </form>
+      </Card>
+
+      <Card className="p-5 space-y-4">
+        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+          <MessageCircle className="w-5 h-5 text-rose-600" aria-hidden="true" /> Mensagens ao cliente
+        </h2>
+        <p className="text-sm text-gray-600">Usadas no botão “Enviar resumo” do pedido, pelo WhatsApp.</p>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); salvarMensagens.mutate(mensagens); }}>
+          <div>
+            <Label htmlFor="endereco-retirada">Endereço para retirada</Label>
+            <Input id="endereco-retirada" value={mensagens.endereco_retirada}
+              onChange={(e) => setMensagens({ ...mensagens, endereco_retirada: e.target.value })} />
+          </div>
+          <div>
+            <Label htmlFor="mensagem-pagamento">Condições de pagamento</Label>
+            <Textarea id="mensagem-pagamento" rows={3} value={mensagens.mensagem_pagamento}
+              onChange={(e) => setMensagens({ ...mensagens, mensagem_pagamento: e.target.value })} />
+            <p className="text-xs text-gray-600 mt-1">Use {'{tipo}'} para inserir “entrega” ou “retirada”.</p>
+          </div>
+          <Button type="submit" className="h-11 bg-rose-600 hover:bg-rose-700" disabled={salvarMensagens.isPending}>Salvar mensagens</Button>
         </form>
       </Card>
 
