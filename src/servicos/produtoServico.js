@@ -2,7 +2,7 @@
 import { produtoRepositorio } from '@/dados/repositorios/produtoRepositorio';
 import { insumoRepositorio } from '@/dados/repositorios/insumoRepositorio';
 import { pedidoRepositorio } from '@/dados/repositorios/pedidoRepositorio';
-import { agoraIso, gerarId } from '@/dados/conexao';
+import { agoraIso, gerarId, transacao } from '@/dados/conexao';
 import { ErroDeNegocio, exigirNumero, exigirTexto, textoLimpo } from './erros';
 import { calcularCustosProduto, criaCiclo, produtosAbaixoDoSugerido } from './custoServico';
 
@@ -18,14 +18,17 @@ async function carregarTudo() {
 /** Calcula os custos de todos os produtos, resolvendo primeiro os componentes (sub-produtos). */
 function calcularTodos({ produtos, insumos, componentes }) {
   const porId = new Map(produtos.map((p) => [p.id, p]));
+  const agrupar = (lista) => lista.reduce((m, x) => m.set(x.produto_id, [...(m.get(x.produto_id) ?? []), x]), new Map());
+  const insumosPorProduto = agrupar(insumos);
+  const componentesPorProduto = agrupar(componentes);
   const resultado = new Map();
   const calcular = (id, pilha = new Set()) => {
     if (resultado.has(id)) return resultado.get(id);
     if (pilha.has(id)) throw new ErroDeNegocio('Há produtos que usam um ao outro como componente.');
     pilha.add(id);
     const p = porId.get(id);
-    const meusInsumos = insumos.filter((i) => i.produto_id === id);
-    const meusComponentes = componentes.filter((c) => c.produto_id === id)
+    const meusInsumos = insumosPorProduto.get(id) ?? [];
+    const meusComponentes = (componentesPorProduto.get(id) ?? [])
       .map((c) => ({ ...c, custo_unitario_insumos: calcular(c.componente_id, pilha).custo_unitario_insumos }));
     const custos = calcularCustosProduto({ ...p, insumos: meusInsumos, componentes: meusComponentes });
     resultado.set(id, { ...custos, meusInsumos, meusComponentes });
@@ -161,7 +164,12 @@ export const produtoServico = {
   },
 
   /** RF04: recalcula todos os produtos e grava apenas o que mudou. Devolve quantos produtos mudaram. */
-  async recalcularTodos() {
+  recalcularTodos() {
+    // Uma única transação: grava tudo de uma vez (mais rápido e consistente).
+    return transacao(() => this.recalcularDentroDaTransacao());
+  },
+
+  async recalcularDentroDaTransacao() {
     const todos = await carregarTudo();
     const calculados = calcularTodos(todos);
     let alterados = 0;

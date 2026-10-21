@@ -22,6 +22,8 @@ const FILTROS = {
   todos: { rotulo: 'Todos', teste: () => true },
 };
 
+const POR_PAGINA = 50;
+
 const ORDENS = {
   proximas: { rotulo: 'Entrega (mais próximas)', comparar: (a, b) => (a.data_entrega + (a.hora_entrega ?? '')).localeCompare(b.data_entrega + (b.hora_entrega ?? '')) },
   recentes: { rotulo: 'Entrega (mais recentes)', comparar: (a, b) => b.data_entrega.localeCompare(a.data_entrega) },
@@ -34,6 +36,7 @@ export default function Pedidos() {
   const [filtro, setFiltro] = useState('ativos');
   const [ordem, setOrdem] = useState('proximas');
   const [busca, setBusca] = useState('');
+  const [limite, setLimite] = useState(POR_PAGINA);
 
   const { data: pedidos = [], isLoading } = useQuery({
     queryKey: ['pedidos', { clienteId }],
@@ -90,9 +93,18 @@ export default function Pedidos() {
           descricao={pedidos.length === 0 ? 'Registre o primeiro pedido.' : 'Mude o filtro ou a busca.'}
           rotuloAcao={pedidos.length === 0 ? 'Novo pedido' : undefined} rotaAcao="/pedidos/novo" />
       ) : (
-        <ul className="grid gap-3">
-          {visiveis.map((p) => <li key={p.id}><CartaoPedido pedido={p} mostrarData /></li>)}
-        </ul>
+        <>
+          <ul className="grid gap-3">
+            {visiveis.slice(0, limite).map((p) => <li key={p.id}><CartaoPedido pedido={p} mostrarData /></li>)}
+          </ul>
+          {visiveis.length > limite && (
+            <div className="text-center">
+              <Button variant="outline" onClick={() => setLimite(limite + POR_PAGINA)}>
+                Mostrar mais ({visiveis.length - limite} restantes)
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

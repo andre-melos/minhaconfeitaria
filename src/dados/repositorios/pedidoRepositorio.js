@@ -20,11 +20,16 @@ export const pedidoRepositorio = {
       SELECT ${CAMPOS} FROM pedido p JOIN cliente c ON c.id = p.cliente_id ${where}
       ORDER BY p.data_entrega, p.hora_entrega`, parametros)).map(paraPedido);
     if (pedidos.length === 0) return pedidos;
+    // Mesma condição da consulta principal (sem lista IN, que tem limite de parâmetros no SQLite).
     const itens = await consultar(`
       SELECT i.pedido_id, i.produto_id, i.quantidade, pr.nome AS produto_nome
-      FROM item_pedido i JOIN produto pr ON pr.id = i.produto_id
-      WHERE i.pedido_id IN (${pedidos.map(() => '?').join(',')})`, pedidos.map((p) => p.id));
-    return pedidos.map((p) => ({ ...p, itens: itens.filter((i) => i.pedido_id === p.id) }));
+      FROM item_pedido i JOIN pedido p ON p.id = i.pedido_id JOIN produto pr ON pr.id = i.produto_id ${where}`, parametros);
+    const porPedido = new Map();
+    for (const i of itens) {
+      if (!porPedido.has(i.pedido_id)) porPedido.set(i.pedido_id, []);
+      porPedido.get(i.pedido_id).push(i);
+    }
+    return pedidos.map((p) => ({ ...p, itens: porPedido.get(p.id) ?? [] }));
   },
 
   async buscarPorId(id) {
