@@ -76,6 +76,11 @@
 }
 
 @layer base {
+  /* Itens de grade não podem ficar mais largos que a tela (textos longos com reticências). */
+  .grid > *,
+  fieldset {
+    min-width: 0;
+  }
   * {
     @apply border-border outline-ring/50;
   }

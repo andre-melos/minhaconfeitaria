@@ -60,7 +60,7 @@ export default function Agenda() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
+    <div className="max-w-5xl mx-auto space-y-5 pb-24 lg:pb-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Agenda</h1>
@@ -70,7 +70,7 @@ export default function Agenda() {
           <Segmentado rotulo="Visualização" valor={visao} aoMudar={setVisao}
             opcoes={[{ valor: 'dia', rotulo: 'Dia' }, { valor: 'semana', rotulo: 'Semana' }, { valor: 'mes', rotulo: 'Mês' }]} />
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-48 h-10" aria-label="Filtrar por status"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-64 h-11" aria-label="Filtrar por status"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos (exceto cancelados)</SelectItem>
               {Object.entries(STATUS_PEDIDO).map(([v, r]) => <SelectItem key={v} value={v}>{r}</SelectItem>)}
@@ -83,7 +83,7 @@ export default function Agenda() {
         <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => mover(-1)} aria-label="Anterior"><ChevronLeft /></Button>
         <div className="text-center">
           <p className="font-semibold">{maiuscula(titulo)}</p>
-          <Button variant="link" className="h-7 text-rose-700" onClick={() => setData(new Date())}>Hoje</Button>
+          <Button variant="link" className="h-11 text-rose-700" onClick={() => setData(new Date())}>Hoje</Button>
         </div>
         <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => mover(1)} aria-label="Próximo"><ChevronRight /></Button>
       </Card>
@@ -112,7 +112,7 @@ export default function Agenda() {
                   <li key={iso(dia)}>
                     <Card className={`p-4 ${isSameDay(dia, new Date()) ? 'ring-2 ring-rose-400' : ''} ${pico ? 'bg-rose-50/40' : ''}`}>
                       <div className="flex justify-between items-center mb-2">
-                        <button type="button" className="font-medium text-left hover:underline"
+                        <button type="button" className="font-medium text-left hover:underline min-h-11 -my-2 py-2"
                           onClick={() => { setData(dia); setVisao('dia'); }}>
                           {maiuscula(format(dia, "EEEE, dd 'de' MMM", { locale: ptBR }))}
                         </button>

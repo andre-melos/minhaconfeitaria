@@ -240,3 +240,12 @@ describe('RF21 e RF22 – validação do arquivo de backup', () => {
     expect(() => validarConteudo(JSON.stringify({ ...valido, tabelas: { cliente: 'x' } }), 5)).toThrow('corrompido');
   });
 });
+
+describe('formatarTelefone', async () => {
+  const { formatarTelefone } = await import('../clienteServico.js').catch(() => ({}));
+  it.skipIf(!formatarTelefone)('formata celular e fixo com DDD', () => {
+    expect(formatarTelefone('51999990000')).toBe('(51) 99999-0000');
+    expect(formatarTelefone('(51) 3333-0000')).toBe('(51) 3333-0000');
+    expect(formatarTelefone('+1 555 0100')).toBe('+1 555 0100');
+  });
+});

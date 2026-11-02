@@ -1,5 +1,6 @@
 // UC17 – Exportar Backup e UC18 – Importar Backup (RF21, RF22, RNF10)
 import { Capacitor } from '@capacitor/core';
+import { format } from 'date-fns';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { consultar, executar, transacao, agoraIso } from '@/dados/conexao';
@@ -75,7 +76,7 @@ export const backupServico = {
   /** Exporta e abre o compartilhamento do aparelho (no navegador, baixa o arquivo). */
   async exportar() {
     const conteudo = await this.gerarConteudo();
-    const nome = `minhaconfeitaria-backup-${agoraIso().slice(0, 16).replace(/[T:]/g, '-')}.json`;
+    const nome = `minhaconfeitaria-backup-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.json`;
     if (Capacitor.isNativePlatform()) {
       const { uri } = await Filesystem.writeFile({ path: nome, data: conteudo, directory: Directory.Cache, encoding: Encoding.UTF8 });
       await Share.share({ title: 'Backup MinhaConfeitaria', files: [uri], dialogTitle: 'Salvar backup' });

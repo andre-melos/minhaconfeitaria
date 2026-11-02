@@ -123,7 +123,7 @@ export default function Relatorios() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <table className="w-full text-sm mt-3">
+              <table className="w-full text-sm mt-3 [&_td]:pl-2 [&_th]:pl-2 [&_.text-right]:whitespace-nowrap">
                 <caption className="sr-only">Vendas por categoria</caption>
                 <thead><tr className="text-left text-gray-600 border-b"><th className="py-2">Categoria</th><th className="text-right">Qtd.</th><th className="text-right">Vendas</th><th className="text-right">Lucro</th></tr></thead>
                 <tbody>
@@ -143,7 +143,7 @@ export default function Relatorios() {
                 <Segmentado rotulo="Ordenar ranking" valor={ordem} aoMudar={setOrdem}
                   opcoes={[{ valor: 'quantidade', rotulo: 'Por quantidade' }, { valor: 'valor', rotulo: 'Por valor' }]} />
               </div>
-              <table className="w-full text-sm">
+              <table className="w-full text-sm [&_td]:pl-2 [&_th]:pl-2 [&_.text-right]:whitespace-nowrap">
                 <caption className="sr-only">Ranking de produtos</caption>
                 <thead><tr className="text-left text-gray-600 border-b"><th className="py-2">#</th><th>Produto</th><th className="text-right">Qtd.</th><th className="text-right">Vendas</th><th className="text-right">Lucro</th></tr></thead>
                 <tbody>

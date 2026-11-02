@@ -88,7 +88,7 @@ export default function Clientes() {
                   <div className="flex-1 min-w-0">
                     <h2 className="font-semibold text-gray-900 truncate">{cliente.nome}</h2>
                     <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-gray-600">
-                      <a href={`tel:${cliente.telefone}`} className="flex items-center gap-1 hover:text-rose-700">
+                      <a href={`tel:${cliente.telefone}`} className="flex items-center gap-1 hover:text-rose-700 py-2.5 -my-2.5">
                         <Phone className="w-4 h-4" aria-hidden="true" /> {cliente.telefone}
                       </a>
                       {cliente.endereco && (

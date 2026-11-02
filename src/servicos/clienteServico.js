@@ -4,6 +4,14 @@ import { pedidoRepositorio } from '@/dados/repositorios/pedidoRepositorio';
 import { gerarId, agoraIso } from '@/dados/conexao';
 import { ErroDeNegocio, exigirTexto, textoLimpo } from './erros';
 
+/** Formata telefones brasileiros com DDD: (51) 99999-0000 ou (51) 3333-0000. Outros formatos ficam como digitados. */
+export function formatarTelefone(texto) {
+  const d = String(texto ?? '').replace(/\D/g, '');
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return String(texto ?? '').trim();
+}
+
 function validar(dados) {
   const nome = exigirTexto(dados.nome, 'o nome', 100);
   const telefone = exigirTexto(dados.telefone, 'o telefone', 20);
@@ -12,7 +20,7 @@ function validar(dados) {
   }
   return {
     nome,
-    telefone,
+    telefone: formatarTelefone(telefone),
     endereco: textoLimpo(dados.endereco),
     observacoes: textoLimpo(dados.observacoes),
   };

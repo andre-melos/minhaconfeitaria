@@ -64,17 +64,17 @@ function ListaItens({ titulo, ajuda, opcoes, itens, chave, nomeCampo, unidadeDe,
     aoMudar([...itens, { [chave]: id, [nomeCampo]: opcao.nome, quantidade: '' }]);
   };
   return (
-    <fieldset className="space-y-2">
+    <fieldset className="space-y-2 min-w-0">
       <legend className="font-medium text-gray-900">{titulo}</legend>
       {ajuda && <p className="text-xs text-gray-600">{ajuda}</p>}
       {itens.map((item, k) => (
-        <div key={item[chave]} className="flex items-center gap-2">
-          <span className="flex-1 text-sm truncate">{item[nomeCampo]}</span>
-          <Input aria-label={`Quantidade de ${item[nomeCampo]}`} inputMode="decimal" className="w-24 h-10" value={item.quantidade}
+        <div key={item[chave]} className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 border-b sm:border-0 pb-2 sm:pb-0">
+          <span className="basis-full sm:basis-auto sm:flex-1 min-w-0 text-sm font-medium sm:font-normal truncate">{item[nomeCampo]}</span>
+          <Input aria-label={`Quantidade de ${item[nomeCampo]}`} inputMode="decimal" className="w-24 h-11" value={item.quantidade}
             onChange={(e) => aoMudar(itens.map((x, j) => (j === k ? { ...x, quantidade: e.target.value } : x)))} />
           <span className="w-12 text-sm text-gray-600">{unidadeDe(item)}</span>
-          {custoDe && <span className="w-20 text-right text-sm text-gray-700">{moeda(custoDe(k))}</span>}
-          <Button type="button" variant="ghost" size="icon" className="h-10 w-10" aria-label={`Remover ${item[nomeCampo]}`}
+          {custoDe && <span className="flex-1 sm:flex-none sm:w-20 text-right text-sm text-gray-700">{moeda(custoDe(k))}</span>}
+          <Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`Remover ${item[nomeCampo]}`}
             onClick={() => aoMudar(itens.filter((_, j) => j !== k))}>
             <X className="w-4 h-4 text-red-600" />
           </Button>
@@ -332,7 +332,7 @@ export default function Produtos() {
                 <div className="text-sm space-y-1">
                   <LinhaResumo rotulo="Insumos e componentes" valor={moeda(previa.custo_insumos)} />
                   <LinhaResumo rotulo="Mão de obra" valor={moeda(previa.mao_obra_calculada)} />
-                  <LinhaResumo rotulo="Outros custos" valor={moeda(previa.custo_total - previa.custo_insumos - previa.mao_obra_calculada)} />
+                  <LinhaResumo rotulo="Outros custos" valor={moeda(Math.max(0, Math.round((previa.custo_total - previa.custo_insumos - previa.mao_obra_calculada) * 100) / 100))} />
                   <LinhaResumo rotulo="Custo total da receita" valor={moeda(previa.custo_total)} destaque />
                   <LinhaResumo rotulo="Custo por unidade" valor={moeda(previa.custo_unitario)} destaque />
                 </div>

@@ -103,7 +103,7 @@ export default function Configuracoes() {
           </div>
           <div>
             <Label htmlFor="mensagem-pagamento">Condições de pagamento</Label>
-            <Textarea id="mensagem-pagamento" rows={3} value={mensagens.mensagem_pagamento}
+            <Textarea id="mensagem-pagamento" rows={5} value={mensagens.mensagem_pagamento}
               onChange={(e) => setMensagens({ ...mensagens, mensagem_pagamento: e.target.value })} />
             <p className="text-xs text-gray-600 mt-1">Use {'{tipo}'} para inserir “entrega” ou “retirada”.</p>
           </div>

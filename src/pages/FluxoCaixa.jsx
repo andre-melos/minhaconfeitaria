@@ -55,10 +55,10 @@ export default function FluxoCaixa() {
 
       {isLoading || !fluxo ? <Carregando /> : (
         <>
-          <div className="grid grid-cols-3 gap-3" aria-live="polite">
-            <Card className="p-4"><p className="text-sm text-gray-600">Entradas</p><p className="text-xl sm:text-2xl font-bold text-green-800">{moeda(fluxo.entradas)}</p></Card>
-            <Card className="p-4"><p className="text-sm text-gray-600">Saídas</p><p className="text-xl sm:text-2xl font-bold text-red-700">{moeda(fluxo.saidas)}</p></Card>
-            <Card className="p-4"><p className="text-sm text-gray-600">Saldo</p><p className={`text-xl sm:text-2xl font-bold ${fluxo.saldo < 0 ? 'text-red-700' : 'text-gray-900'}`}>{moeda(fluxo.saldo)}</p></Card>
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3" aria-live="polite">
+            <Card className="p-4 flex items-baseline justify-between gap-2 min-[420px]:block"><p className="text-sm text-gray-600">Entradas</p><p className="text-lg sm:text-2xl font-bold text-green-800">{moeda(fluxo.entradas)}</p></Card>
+            <Card className="p-4 flex items-baseline justify-between gap-2 min-[420px]:block"><p className="text-sm text-gray-600">Saídas</p><p className="text-lg sm:text-2xl font-bold text-red-700">{moeda(fluxo.saidas)}</p></Card>
+            <Card className="p-4 flex items-baseline justify-between gap-2 min-[420px]:block"><p className="text-sm text-gray-600">Saldo</p><p className={`text-lg sm:text-2xl font-bold ${fluxo.saldo < 0 ? 'text-red-700' : 'text-gray-900'}`}>{moeda(fluxo.saldo)}</p></Card>
           </div>
           {fluxo.aReceber.total > 0 && (
             <p className="text-sm text-orange-900 bg-orange-50 border border-orange-200 rounded-lg p-3">
@@ -74,7 +74,7 @@ export default function FluxoCaixa() {
                 <ul className="text-sm divide-y">
                   {fluxo.pagamentos.map((p) => (
                     <li key={p.id} className="py-2 flex justify-between gap-2">
-                      <Link to={`/pedidos/${p.pedido_id}`} className="hover:underline">{dataCurta(p.data)} · {p.cliente_nome} · {FORMAS_PAGAMENTO[p.forma]}</Link>
+                      <Link to={`/pedidos/${p.pedido_id}`} className="hover:underline inline-block py-2.5 -my-2.5">{dataCurta(p.data)} · {p.cliente_nome} · {FORMAS_PAGAMENTO[p.forma]}</Link>
                       <span className="font-medium text-green-800">{moeda(p.valor)}</span>
                     </li>
                   ))}
