@@ -37,3 +37,4 @@ android/app/build
 # Chaves de assinatura do Android (nunca versionar)
 *.jks
 *.keystore
+android/app/release/
