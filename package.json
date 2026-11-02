@@ -13,7 +13,8 @@
     "lint:fix": "eslint . --fix",
     "preview": "vite preview",
     "postinstall": "node scripts/copiar-sqlite-wasm.cjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "script-banco": "node scripts/gerar-script-banco.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^7.0.0",

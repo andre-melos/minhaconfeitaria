@@ -24,6 +24,7 @@ export default function CalculadoraEmbalagens() {
       <CabecalhoPagina titulo="Calculadora de embalagens" subtitulo="Quantas embalagens separar ou comprar" />
       <p className="text-sm text-gray-600">
         As embalagens usadas por unidade de cada produto são informadas no <Link to="/produtos" className="underline text-rose-700">cadastro do produto</Link>.
+        O cálculo é só de quantidades; o custo das embalagens entra na ficha técnica, como insumo.
       </p>
       <OrigemQuantidades produtos={data.produtos.filter((p) => p.ativo)} aoMudar={setOrigem} />
 

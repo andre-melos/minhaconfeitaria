@@ -25,6 +25,8 @@ src/
 ```
 
 O esquema do banco é criado e atualizado pelas migrações em `src/dados/migracoes.js`.
+O script completo do banco (18 tabelas, chaves estrangeiras e índices) está em `banco/script_banco.sql`;
+ele é gerado a partir das migrações com `npm run script-banco`.
 
 ## Como executar
 

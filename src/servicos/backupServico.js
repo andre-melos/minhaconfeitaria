@@ -118,6 +118,24 @@ export const backupServico = {
     });
   },
 
+  /**
+   * "Esqueci o PIN" sem backup: apaga todos os dados locais e o PIN, voltando o app ao estado inicial.
+   * Mantém só as categorias iniciais, como numa instalação nova.
+   */
+  async apagarTudo(confirmacao) {
+    if (String(confirmacao ?? '').trim().toUpperCase() !== 'APAGAR') {
+      throw new ErroDeNegocio('Digite APAGAR para confirmar.');
+    }
+    await transacao(async () => {
+      for (const tabela of [...TABELAS_DO_BACKUP].reverse()) await executar(`DELETE FROM ${tabela}`);
+      await executar(`UPDATE configuracao SET pin_hash = NULL, pin_salt = NULL, ultimo_backup_em = NULL,
+        margem_padrao = 50, endereco_retirada = NULL WHERE id = 1`);
+      for (const [nome, emoji] of [['Bolos', '🎂'], ['Doces', '🍬'], ['Salgados', '🥟']]) {
+        await executar('INSERT INTO categoria (id, nome, emoji, ativa) VALUES (?, ?, ?, 1)', [crypto.randomUUID(), nome, emoji]);
+      }
+    });
+  },
+
   /** Lembrete quando há dados e o último backup tem mais de 7 dias (ou nunca foi feito). */
   async precisaLembrar() {
     const config = await configuracaoRepositorio.obter();

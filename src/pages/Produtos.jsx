@@ -296,7 +296,7 @@ export default function Produtos() {
 
               <section className="space-y-4 border rounded-xl p-4">
                 <h3 className="font-semibold text-gray-900">Ficha técnica (para o rendimento informado)</h3>
-                <ListaItens titulo="Insumos" ajuda="Quantidade em gramas (g), mililitros (ml) ou unidades (un)."
+                <ListaItens titulo="Insumos" ajuda="Quantidade em gramas (g), mililitros (ml) ou unidades (un). O custo de forminhas, caixas e outras embalagens entra aqui, cadastrado como insumo."
                   opcoes={insumos} itens={formulario.insumos} chave="insumo_id" nomeCampo="insumo_nome"
                   unidadeDe={unidadeInsumo} custoDe={(k) => previa.itensInsumo[k]} rotuloAdicionar="Adicionar insumo..."
                   aoMudar={(lista) => setFormulario({ ...formulario, insumos: lista })} />
@@ -322,7 +322,7 @@ export default function Produtos() {
                   <div>
                     <Label htmlFor="outros-custos">Outros custos (R$)</Label>
                     <Input id="outros-custos" inputMode="decimal" value={formulario.outros_custos} onChange={campo('outros_custos')}
-                      placeholder="Gás, energia, transporte" />
+                      placeholder="Gás, energia, transporte (sem embalagens)" />
                   </div>
                 </div>
               </section>
@@ -360,7 +360,9 @@ export default function Produtos() {
               </section>
 
               <section className="border rounded-xl p-4">
-                <ListaItens titulo="Embalagens por unidade vendida" opcoes={embalagens.filter((e) => e.ativa)}
+                <ListaItens titulo="Embalagens por unidade vendida"
+                  ajuda="Usado só na Calculadora de Embalagens (quantidades para separar ou comprar). Não entra no custo, para não contar duas vezes."
+                  opcoes={embalagens.filter((e) => e.ativa)}
                   itens={formulario.embalagens} chave="embalagem_id" nomeCampo="embalagem_nome" unidadeDe={() => 'un'}
                   rotuloAdicionar="Adicionar embalagem..." aoMudar={(lista) => setFormulario({ ...formulario, embalagens: lista })} />
               </section>

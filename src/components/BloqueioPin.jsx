@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { configuracaoServico } from '@/servicos/configuracaoServico';
 import ImportarBackup from '@/components/ImportarBackup';
+import { backupServico } from '@/servicos/backupServico';
 
 const TEMPO_SEGUNDO_PLANO_MS = 5 * 60 * 1000;
 const MAX_TENTATIVAS = 5;
@@ -72,6 +73,50 @@ function CriarPin({ aoCriar }) {
   );
 }
 
+function ApagarTudo({ aoConcluir }) {
+  const [aberto, setAberto] = useState(false);
+  const [texto, setTexto] = useState('');
+  const [erro, setErro] = useState('');
+  const [apagando, setApagando] = useState(false);
+
+  const apagar = async (e) => {
+    e.preventDefault();
+    setApagando(true);
+    try {
+      await backupServico.apagarTudo(texto);
+      aoConcluir();
+    } catch (falha) {
+      setErro(falha.message);
+      setApagando(false);
+    }
+  };
+
+  if (!aberto) {
+    return (
+      <Button variant="ghost" className="w-full h-11 text-red-700 hover:text-red-800" onClick={() => setAberto(true)}>
+        Não tenho backup
+      </Button>
+    );
+  }
+  return (
+    <form onSubmit={apagar} className="space-y-2 border border-red-200 bg-red-50 rounded-lg p-3">
+      <p className="text-red-900">
+        Sem backup, a única saída é <strong>apagar todos os dados</strong> (clientes, produtos, pedidos e finanças) e começar do zero.
+        Isso não pode ser desfeito.
+      </p>
+      <Label htmlFor="confirmar-apagar">Digite APAGAR para confirmar</Label>
+      <Input id="confirmar-apagar" value={texto} autoComplete="off" onChange={(e) => { setTexto(e.target.value); setErro(''); }} />
+      {erro && <p role="alert" className="text-red-700">{erro}</p>}
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" className="flex-1 h-11" onClick={() => { setAberto(false); setTexto(''); }}>Voltar</Button>
+        <Button type="submit" className="flex-1 h-11 bg-red-700 hover:bg-red-800" disabled={apagando || texto.trim().toUpperCase() !== 'APAGAR'}>
+          {apagando && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Apagar tudo
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function Desbloquear({ aoDesbloquear, aoRedefinir }) {
   const [pin, setPin] = useState('');
   const [erro, setErro] = useState('');
@@ -116,8 +161,9 @@ function Desbloquear({ aoDesbloquear, aoRedefinir }) {
       <details className="text-sm text-gray-700">
         <summary className="cursor-pointer text-center text-rose-700">Esqueci o PIN</summary>
         <div className="mt-3 space-y-2">
-          <p>Por segurança, o PIN só pode ser redefinido importando um backup. Os dados atuais serão substituídos pelos do arquivo.</p>
+          <p>Por segurança, o PIN só pode ser redefinido importando um backup (os dados atuais serão substituídos pelos do arquivo) ou apagando todos os dados.</p>
           <ImportarBackup apagarPin rotulo="Importar backup e criar novo PIN" aoConcluir={aoRedefinir} />
+          <ApagarTudo aoConcluir={aoRedefinir} />
         </div>
       </details>
     </Moldura>

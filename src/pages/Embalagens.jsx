@@ -44,7 +44,8 @@ export default function Embalagens() {
       </CabecalhoPagina>
 
       <p className="text-sm text-gray-600">
-        Para definir quais embalagens cada produto usa, acesse a{' '}
+        Aqui você controla as quantidades de embalagens a separar ou comprar. O custo delas entra no produto
+        cadastrado como insumo (na ficha técnica), para não ser contado duas vezes. Para definir quais embalagens cada produto usa, acesse a{' '}
         <Link to="/calculadora-embalagens" className="text-rose-700 underline">Calculadora de Embalagens</Link>.
       </p>
 
