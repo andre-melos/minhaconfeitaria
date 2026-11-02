@@ -39,6 +39,14 @@ npm test           # executa os testes das regras
 npm run lint       # verifica o código
 ```
 
+## Dados de exemplo para avaliação
+
+O arquivo `banco/backup_exemplo.json` traz dados fictícios (12 clientes, 17 insumos, 7 produtos com ficha técnica,
+53 pedidos de agosto a dezembro de 2026, pagamentos e despesas), com custos calculados pelas mesmas regras do app.
+Para usar: abra o app, crie um PIN, vá em **Configurações > Backup > Importar backup** e escolha o arquivo.
+No celular, copie o arquivo para o aparelho antes (por exemplo, pela pasta Downloads).
+O arquivo é gerado por `npm run backup-exemplo`.
+
 ## Gerar o aplicativo Android (APK)
 
 Pré-requisito: Android Studio recente com JDK 21.

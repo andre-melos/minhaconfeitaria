@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "postinstall": "node scripts/copiar-sqlite-wasm.cjs",
     "test": "vitest run",
-    "script-banco": "node scripts/gerar-script-banco.mjs"
+    "script-banco": "node scripts/gerar-script-banco.mjs",
+    "backup-exemplo": "node scripts/gerar-backup-exemplo.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^7.0.0",
