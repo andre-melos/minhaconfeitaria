@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import BloqueioPin from '@/components/BloqueioPin';
 import Layout from '@/components/Layout';
+import VoltarAndroid from '@/components/VoltarAndroid';
 import Agenda from '@/pages/Agenda';
 import Pedidos from '@/pages/Pedidos';
 import FormularioPedido from '@/pages/FormularioPedido';
@@ -31,6 +32,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BloqueioPin>
         <BrowserRouter>
+          <VoltarAndroid />
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<Navigate to="/agenda" replace />} />
