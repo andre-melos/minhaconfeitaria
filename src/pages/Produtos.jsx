@@ -322,7 +322,7 @@ export default function Produtos() {
                   <div>
                     <Label htmlFor="outros-custos">Outros custos (R$)</Label>
                     <Input id="outros-custos" inputMode="decimal" value={formulario.outros_custos} onChange={campo('outros_custos')}
-                      placeholder="Gás, energia, transporte (sem embalagens)" />
+                      placeholder="Gás, energia, transporte etc." />
                   </div>
                 </div>
               </section>
